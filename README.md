@@ -175,6 +175,6 @@ MIT License - see LICENSE file for details.
 
 ---
 
-**AxonOS v2.1 - The Future of Secure Brain-Computer Interfaces** 🧠✨
+**AxonOS v2.2 - The Future of Secure Brain-Computer Interfaces** 🧠✨
 
 *Built with ❤️ for privacy, security, and human potential.*
