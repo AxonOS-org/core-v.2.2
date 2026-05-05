@@ -1,0 +1,31 @@
+# Rust
+/target
+**/*.rs.bk
+Cargo.lock
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# Build artifacts
+/build
+/dist
+*.elf
+*.bin
+*.hex
+*.map
+
+# Measurement data
+/dwt_traces
+*.parquet
+*.csv
+
+# Documentation build
+/docs/_build
+
+# OS
+.DS_Store
+Thumbs.db
