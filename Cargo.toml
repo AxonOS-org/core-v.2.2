@@ -12,8 +12,8 @@ rust-version = "1.85.0"
 
 [features]
 default = ["cortex-m4f"]
-cortex-m4f = ["cortex-m4f-hal"]
-cortex-m33 = ["cortex-m33-hal", "trustzone"]
+cortex-m4f = []
+cortex-m33 = ["trustzone"]
 trustzone = []
 kani = []
 
@@ -24,9 +24,9 @@ panic-halt = "0.2"
 heapless = "0.8"
 bitflags = "2.6"
 const_format = "0.2"
+micromath = "2.1"
 
 [dev-dependencies]
-# Testing on host with std
 criterion = { version = "0.5", features = ["html_reports"] }
 
 [profile.dev]
