@@ -1,5 +1,3 @@
-//! Dual-core contract demo
-
 #![no_std]
 #![no_main]
 

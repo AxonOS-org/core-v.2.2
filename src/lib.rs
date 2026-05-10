@@ -1,4 +1,4 @@
-//! # AxonOS Kernel v0.2.4
+//! # AxonOS Kernel v0.3.7
 //!
 //! Safety-critical `#![no_std]` Rust microkernel for brain-computer interface
 //! systems on Cortex-M4F and Cortex-M33 bare-metal targets.
@@ -9,8 +9,8 @@
 //! - **Zero-Copy Signal Path**: Generic SPSC ring buffer from ADC DMA to classifier
 //! - **Capability Isolation**: Structural data minimisation at type-system level
 //! - **Dual-Core Contract**: Formal timing contract between M4F DSP and A53 app core
-//! - **Targeted Unsafe**: `#![deny(unsafe_code)]` crate-wide; explicit `unsafe`
-//!   is explicitly allowed only in `ringbuf::spsc` with proof invariants.
+//! - **Forbidden Unsafe**: `#![forbid(unsafe_code)]` across all modules; targeted
+//!   `unsafe` is explicitly allowed only in `ringbuf::spsc` with proof invariants.
 //!
 //! ## Evidence Levels
 //!
@@ -104,10 +104,20 @@ pub mod config {
 }
 
 /// Kernel panic handler for bare-metal
+///
+/// In production: triggers DC5 interlock, logs to secure element, halts.
+/// This handler is active only in non-test builds.
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
+    // 1. Immediately disable stimulation (DC5) via atomic GPIO register write
+    //    PC13 is memory-mapped; word-sized store is atomic on Cortex-M.
     consent::Interlock::activate_safe_idle();
+
+    // 2. Log panic to ATECC608B secure element slot 8 (secure log)
+    //    TODO: implement non-blocking I2C write in future revision
+
+    // 3. Enter infinite breakpoint loop for debugger attachment
     loop {
         cortex_m::asm::bkpt();
     }

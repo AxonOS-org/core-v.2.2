@@ -1,7 +1,3 @@
-//! Kani proofs for SPSC ring buffer
-//!
-//! Run with: cargo kani --features kani
-
 #![cfg(feature = "kani")]
 
 use axonos_kernel::ringbuf::SpscRingBuffer;

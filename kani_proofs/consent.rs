@@ -1,8 +1,3 @@
-//! Kani proofs for consent FSM
-//!
-//! References:
-//! - AxonOS RFC-0002: MMP Consent Model.
-
 #![cfg(feature = "kani")]
 
 use axonos_kernel::consent::{ConsentFsm, ConsentOp, ConsentState};

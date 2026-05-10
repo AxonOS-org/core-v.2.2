@@ -1,5 +1,3 @@
-//! Basic pipeline demo — STM32F407
-
 #![no_std]
 #![no_main]
 

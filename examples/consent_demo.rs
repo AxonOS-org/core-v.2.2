@@ -1,5 +1,3 @@
-//! Consent + TrustZone demo — STM32H573
-
 #![no_std]
 #![no_main]
 

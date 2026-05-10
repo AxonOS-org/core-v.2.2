@@ -20,13 +20,3 @@
 | CSP | 100.0 |
 | LDA | 40.2 |
 | **Total** | **640.2** |
-
-## Zero-Copy Guarantee
-
-SPSC ring buffer passes `MotorImageryClass` by value (Copy type). No heap allocation on hot path.
-
-## References
-
-- Blankertz, B., et al. (2008). "Optimizing spatial filters for robust EEG single-trial analysis." IEEE SPM 25(1), 41–56.
-- Fukunaga, K. (1990). *Introduction to Statistical Pattern Recognition* (2nd ed.). Academic Press.
-- Welch, G., & Bishop, G. (2006). "An Introduction to the Kalman Filter." UNC TR 95-041.

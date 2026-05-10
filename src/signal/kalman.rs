@@ -1,29 +1,15 @@
 //! Kalman state estimator (Stage 1)
-//!
-//! Simple scalar Kalman filter per channel.
-//!
-//! Reference: Welch, G., & Bishop, G. (2006). "An Introduction to the
-//! Kalman Filter." UNC-Chapel Hill Technical Report TR 95-041.
-
 use super::EegFrame;
-
 pub struct KalmanEstimator {
     x: [f32; crate::config::EEG_CHANNELS],
     p: [f32; crate::config::EEG_CHANNELS],
     q: f32,
     r: f32,
 }
-
 impl KalmanEstimator {
-    pub fn new(_channels: usize) -> Self {
-        Self {
-            x: [0.0; crate::config::EEG_CHANNELS],
-            p: [1.0; crate::config::EEG_CHANNELS],
-            q: 0.01,
-            r: 100.0,
-        }
+    pub fn new(_: usize) -> Self {
+        Self { x: [0.0; 8], p: [1.0; 8], q: 0.01, r: 100.0 }
     }
-
     pub fn update(&mut self, frame: EegFrame) -> EegFrame {
         let mut out = EegFrame::zero();
         for i in 0..crate::config::EEG_CHANNELS {
@@ -36,9 +22,8 @@ impl KalmanEstimator {
         }
         out
     }
-
     pub fn reset(&mut self) {
-        self.x = [0.0; crate::config::EEG_CHANNELS];
-        self.p = [1.0; crate::config::EEG_CHANNELS];
+        self.x = [0.0; 8];
+        self.p = [1.0; 8];
     }
 }

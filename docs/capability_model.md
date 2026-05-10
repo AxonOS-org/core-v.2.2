@@ -17,8 +17,3 @@ Applications declare capabilities at install time. Kernel verifies M ⊆ K.
 | Environmental | 2 Hz |
 | Stimulation | 1 Hz |
 | RawEeg | 250 Hz (restricted) |
-
-## References
-
-- Miller, M. S., Yee, K., & Shapiro, J. (2003). "Capability myths demolished." SRL TR.
-- AxonOS RFC-0004: Capability Model Specification.

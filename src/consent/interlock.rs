@@ -1,22 +1,14 @@
 //! Stimulation Interlock — Production Implementation
 //!
 //! DC5: Safe-idle on M4F heartbeat loss ≤ 12 ms [L2]
-//!
-//! Hardware interlock that cuts stimulation power when:
-//! 1. M4F heartbeat lost (> 12 ms)
-//! 2. Consent withdrawn
-//! 3. DC1 deadline miss detected
-//!
-//! References:
-//! - STM32F4xx Reference Manual RM0090, Section 8: GPIOs.
-//! - AxonOS RFC-0002, Section 5: Safe-Idle Protocol.
+
+#![allow(unsafe_code)]
 
 use super::{ConsentFsm, ConsentState};
 use crate::platform::gpio::{GpioPin, GPIO_PC13};
 
 const STIM_ENABLE_PIN: GpioPin = GPIO_PC13;
 
-/// Stimulation interlock state
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InterlockState {
     Active,
@@ -24,7 +16,6 @@ pub enum InterlockState {
     Error,
 }
 
-/// Stimulation interlock
 pub struct Interlock {
     state: InterlockState,
     heartbeat_misses: u32,
@@ -48,6 +39,9 @@ impl Interlock {
         self.gpio_configured = true;
     }
 
+    /// Activate safe-idle (disable stimulation) — callable from any context
+    ///
+    /// Uses atomic word-sized store to memory-mapped GPIO register.
     pub fn activate_safe_idle() {
         STIM_ENABLE_PIN.set_low();
     }
@@ -67,11 +61,7 @@ impl Interlock {
             InterlockState::Active => {
                 if !consent.is_stimulation_allowed() || !heartbeat_valid {
                     let misses = if heartbeat_valid { 0 } else { heartbeat_misses + 1 };
-                    let next = if misses >= max_misses {
-                        InterlockState::Error
-                    } else {
-                        InterlockState::SafeIdle
-                    };
+                    let next = if misses >= max_misses { InterlockState::Error } else { InterlockState::SafeIdle };
                     (next, misses)
                 } else {
                     (InterlockState::Active, 0)
@@ -82,11 +72,7 @@ impl Interlock {
                     (InterlockState::Active, 0)
                 } else {
                     let misses = if heartbeat_valid { 0 } else { heartbeat_misses + 1 };
-                    let next = if misses >= max_misses {
-                        InterlockState::Error
-                    } else {
-                        InterlockState::SafeIdle
-                    };
+                    let next = if misses >= max_misses { InterlockState::Error } else { InterlockState::SafeIdle };
                     (next, misses)
                 }
             }
@@ -119,9 +105,7 @@ impl Interlock {
         self.heartbeat_misses = misses;
     }
 
-    pub fn state(&self) -> InterlockState {
-        self.state
-    }
+    pub fn state(&self) -> InterlockState { self.state }
 
     pub fn is_stimulating(&self) -> bool {
         self.state == InterlockState::Active

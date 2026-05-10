@@ -27,10 +27,3 @@ lib.rs
 | [L1]  | Instruction-count from assembly | None |
 | [L2]  | DWT cycle counter | STM32F407 |
 | [L3]  | Oscilloscope (Saleae Logic Pro 16) | STM32H573 |
-
-## References
-
-- Liu, C. L., & Layland, J. W. (1973). JACM 20(1), 46–61.
-- Buttazzo, G. C. (2011). *Hard Real-Time Computing Systems* (3rd ed.). Springer.
-- Vyukov, D. (2010). "Lock-free algorithms: The queue and the ring buffer."
-- Miller, M. S., Yee, K., & Shapiro, J. (2003). "Capability myths demolished."

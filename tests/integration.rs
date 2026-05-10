@@ -1,6 +1,4 @@
 //! Integration tests
-//!
-//! Tests full kernel workflows: scheduling, signal pipeline, consent, IPC.
 
 use axonos_kernel::scheduler::{EdfScheduler, Task, TaskId, AdmissionError};
 use axonos_kernel::ringbuf::SpscRingBuffer;

@@ -4,7 +4,6 @@
 //! is schedulable under EDF iff Σ U_i ≤ 1.
 //!
 //! AxonOS uses conservative ceiling U_max = 0.25 (Proposition 5.4, Yermakou 2026).
-//! See RFC-0001 for derivation of conservative ceiling.
 
 use super::{Task, TaskId};
 use crate::config;

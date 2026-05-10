@@ -3,11 +3,6 @@
 
 Usage:
     python measure_wcrt.py --port /dev/ttyACM0 --epochs 1000000
-
-References:
-    - Castillo, E. (1988). *Extreme Value Theory in Engineering*.
-      Academic Press. [EVT fitting]
-    - AxonOS RFC-0003: Evidence Taxonomy.
 """
 
 import argparse

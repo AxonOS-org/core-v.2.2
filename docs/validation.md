@@ -3,7 +3,6 @@
 ## L1 Evidence
 
 - Instruction counts derived from `thumbv7em-none-eabihf` assembly.
-- Verified with `cargo objdump --release`.
 
 ## L2 Evidence
 
@@ -13,7 +12,6 @@
 ## L3 Evidence
 
 - Oscilloscope validation with Saleae Logic Pro 16.
-- GPIO toggle on epoch boundary.
 
 ## Kani Verification
 
@@ -26,8 +24,3 @@
 | K5 | Consent terminal | 12 | 2.3s |
 | K6 | Consent liveness | 12 | 1.8s |
 | K7 | Suspended permissions | 12 | 1.5s |
-
-## References
-
-- Castillo, E. (1988). *Extreme Value Theory in Engineering*. Academic Press.
-- AxonOS RFC-0003: Evidence Taxonomy.

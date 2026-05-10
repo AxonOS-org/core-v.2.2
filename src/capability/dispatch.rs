@@ -1,8 +1,4 @@
 //! Capability dispatch
-//!
-//! Verifies manifest against catalogue before dispatching system calls.
-//!
-//! Reference: AxonOS RFC-0004, Section 4.
 
 use super::{Capability, Manifest};
 

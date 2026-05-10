@@ -42,7 +42,6 @@ pub struct EdfScheduler {
     now: u32,
     admission: AdmissionControl,
     deadline_misses: u32,
-    dwt: crate::platform::Dwt,
     epochs: u64,
     wcrt_max: u32,
 }
@@ -56,7 +55,6 @@ impl EdfScheduler {
             now: 0,
             admission: AdmissionControl::new(),
             deadline_misses: 0,
-            dwt: crate::platform::Dwt::new(),
             epochs: 0,
             wcrt_max: 0,
         }
@@ -113,9 +111,13 @@ impl EdfScheduler {
             job.remaining = job.remaining.saturating_sub(elapsed_us);
             if job.is_complete() {
                 job.state = TaskState::Completed;
-                let response = self.now.saturating_sub(job.deadline.saturating_sub(
-                    self.tasks.iter().find(|t| t.id == job.task_id).map(|t| t.period.0).unwrap_or(0)
-                ));
+                // Track WCRT: find parent task period for release time calculation
+                let period = self.tasks.iter()
+                    .find(|t| t.id == job.task_id)
+                    .map(|t| t.period.0)
+                    .unwrap_or(0);
+                let release_time = job.deadline.saturating_sub(period);
+                let response = self.now.saturating_sub(release_time);
                 if response > self.wcrt_max {
                     self.wcrt_max = response;
                 }

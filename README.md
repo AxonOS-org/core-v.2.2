@@ -1,4 +1,4 @@
-# AxonOS Kernel v0.2.4
+# AxonOS Kernel v0.3.7
 
 **Safety-critical `#![no_std]` Rust microkernel for brain-computer interface systems**
 
@@ -11,15 +11,7 @@ AxonOS is a bare-metal real-time operating system for Cortex-M4F and Cortex-M33 
 - **Capability Isolation**: Structural data minimisation at type-system level
 - **Dual-Core Contract**: Formal timing contract between M4F DSP and A53 app core
 - **Targeted Unsafe**: `#![deny(unsafe_code)]` crate-wide; explicit `unsafe`
-  only in `ringbuf::spsc` with proof invariants
-
-## Evidence Levels
-
-| Level | Method | Hardware |
-|-------|--------|----------|
-| [L1]  | Instruction-count from assembly | None |
-| [L2]  | DWT cycle counter | STM32F407 |
-| [L3]  | Oscilloscope (Saleae Logic Pro 16) | STM32H573 |
+  only in `ringbuf::spsc`, `platform/dwt`, `platform/gpio`, `hal`, `consent/interlock` with proof invariants
 
 ## Quick Start
 
@@ -38,31 +30,6 @@ cargo test --lib
 
 # Run Kani proofs
 cargo kani --features kani
-```
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        Application Layer                     │
-│  (Cortex-A53: Session, BLE/Wi-Fi, WASM sandbox)           │
-├─────────────────────────────────────────────────────────────┤
-│                      IPC Contract (DC1-DC6)               │
-│         SPSC Ring Buffer │ Heartbeat │ Attestation        │
-├─────────────────────────────────────────────────────────────┤
-│                      AxonOS Kernel (Cortex-M4F)             │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐  │
-│  │ EDF Scheduler│  │ Signal Pipe │  │ Capability Model │  │
-│  │  (U≤0.25)   │  │ (640µs WCET)│  │  (Theorem 8.3)   │  │
-│  └─────────────┘  └─────────────┘  └─────────────────┘  │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐  │
-│  │ Consent FSM │  │  Interlock  │  │  Attestation     │  │
-│  │  (DC5)      │  │  (Safe-idle)│  │  (ATECC608B)    │  │
-│  └─────────────┘  └─────────────┘  └─────────────────┘  │
-├─────────────────────────────────────────────────────────────┤
-│                      Hardware Abstraction                    │
-│  ADS1299 (ADC) │ nRF52840 (BLE) │ ISO7741 (Isolation)     │
-└─────────────────────────────────────────────────────────────┘
 ```
 
 ## Schedulability Guarantees
@@ -99,15 +66,3 @@ cargo kani --features kani
 ## License
 
 Dual-licensed under Apache-2.0 or MIT at your option.
-
-## Citation
-
-```bibtex
-@article{yermakou2026axonos,
-  title={AxonOS: Analytical Real-Time Schedulability, Structural Capability Isolation,
-         and Empirical Validation of a Safety-Critical Brain Computer Interface Microkernel},
-  author={Yermakou, Denis},
-  journal={arXiv preprint},
-  year={2026}
-}
-```
