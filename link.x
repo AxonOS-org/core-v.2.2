@@ -1,35 +1,13 @@
-/* AxonOS Linker Script */
-
-INCLUDE memory.x
-
-ENTRY(Reset_Handler)
+MEMORY
+{
+  RAM (rwx) : ORIGIN = 0x20000000, LENGTH = 128K
+  FLASH (rx) : ORIGIN = 0x08000000, LENGTH = 1024K
+}
 
 SECTIONS
 {
-  .text :
-  {
-    KEEP(*(.vector_table))
-    *(.text .text.*)
-    *(.rodata .rodata.*)
-  } > FLASH
-
-  .data : AT(ADDR(.text) + SIZEOF(.text))
-  {
-    _sdata = .;
-    *(.data .data.*)
-    _edata = .;
-  } > RAM
-
-  .bss :
-  {
-    _sbss = .;
-    *(.bss .bss.*)
-    _ebss = .;
-  } > RAM
-
-  /* FIR coefficients in CCM for fast access */
-  .ccm :
-  {
-    *(.ccm .ccm.*)
-  } > CCM
+  .text : { *(.text*) } > FLASH
+  .rodata : { *(.rodata*) } > FLASH
+  .data : { *(.data*) } > RAM AT > FLASH
+  .bss : { *(.bss*) } > RAM
 }

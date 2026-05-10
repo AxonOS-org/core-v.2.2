@@ -2,6 +2,8 @@
 //!
 //! Each application declares its capabilities at install time.
 //! The kernel verifies M ⊆ K (manifest is subset of catalogue).
+//!
+//! DC6: Manifests are signed with HMAC-SHA256 (ATECC608B).
 
 use super::{Capability, Catalogue};
 use heapless::Vec;
@@ -14,7 +16,7 @@ pub struct Manifest {
     /// Application identifier
     pub app_id: heapless::String<64>,
     /// Granted capabilities with rate limits
-    pub capabilities: Vec<(Capability, u32), 4>, // max 4 capabilities
+    pub capabilities: Vec<(Capability, u32), 4>,
     /// Manifest version
     pub version: u32,
     /// HMAC-SHA256 signature (DC6)
@@ -43,13 +45,11 @@ impl ManifestBuilder {
         if id.len() > 64 {
             return Err(ManifestError::AppIdTooLong);
         }
-        self.app_id = Some(heapless::String::from_str(id).unwrap());
+        self.app_id = Some(heapless::String::from_str(id).map_err(|_| ManifestError::AppIdTooLong)?);
         Ok(self)
     }
 
     /// Add capability with custom rate limit
-    ///
-    /// Rate limit must not exceed kernel maximum.
     pub fn capability_with_rate(
         mut self,
         cap: Capability,
@@ -71,14 +71,14 @@ impl ManifestBuilder {
         self.capability_with_rate(cap, cap.max_rate_hz())
     }
 
-    /// Build manifest
+    /// Build unsigned manifest (signature must be added via ATECC608B)
     pub fn build(self) -> Result<Manifest, ManifestError> {
         let app_id = self.app_id.ok_or(ManifestError::MissingAppId)?;
         Ok(Manifest {
             app_id,
             capabilities: self.capabilities,
             version: self.version,
-            signature: [0u8; 32],
+            signature: [0u8; 32], // DC6: sign before install
         })
     }
 }

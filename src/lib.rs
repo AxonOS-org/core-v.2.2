@@ -1,4 +1,4 @@
-//! # AxonOS Kernel
+//! # AxonOS Kernel v0.2.2
 //!
 //! Safety-critical `#![no_std]` Rust microkernel for brain-computer interface
 //! systems on Cortex-M4F and Cortex-M33 bare-metal targets.
@@ -6,29 +6,18 @@
 //! ## Core Properties
 //!
 //! - **EDF Scheduling**: Earliest-Deadline-First with Liu-Layland schedulability test
-//! - **Zero-Copy Signal Path**: SPSC ring buffer from ADC DMA to classifier
+//! - **Zero-Copy Signal Path**: Generic SPSC ring buffer from ADC DMA to classifier
 //! - **Capability Isolation**: Structural data minimisation at type-system level
 //! - **Dual-Core Contract**: Formal timing contract between M4F DSP and A53 app core
-//! - **Forbidden Unsafe**: `#![deny(unsafe_code)]` across all modules except two targeted blocks in SPSC
+//! - **Forbidden Unsafe**: `#![deny(unsafe_code)]` across all modules; targeted
+//!   `unsafe` is explicitly allowed only in `ringbuf::spsc` with proof invariants.
 //!
 //! ## Evidence Levels
 //!
-//! Every quantitative claim carries a mandatory evidence label:
 //! - `[L1]`: Instruction-count derived
 //! - `[L2]`: Runtime measured (DWT cycle counter)
 //! - `[L3]`: Oscilloscope-validated
 //! - `[pending]`: Not yet measured
-//!
-//! ## Reference Hardware
-//!
-//! | Component | Part | Role |
-//! |-----------|------|------|
-//! | DSP core | STM32F407 Cortex-M4F @ 168 MHz | Signal pipeline, consent FSM |
-//! | App core | Cortex-A53 @ 1.2 GHz | Session, I/O, WASM sandbox |
-//! | ADC | ADS1299 8-ch 24-bit 250 SPS | EEG acquisition |
-//! | Secure element | ATECC608B | HMAC attestation |
-//! | BLE radio | nRF52840 BLE 5.3 | Intent egress |
-//! | Isolation | ISO7741 5 kV | Galvanic isolation |
 
 #![no_std]
 #![deny(unsafe_code)]
@@ -128,7 +117,6 @@ pub mod config {
     pub const FLASH_WAIT_STATES: u8 = 5;
 
     /// PLL configuration: HSE 8 MHz → 168 MHz [L1]
-    /// PLLM = 8, PLLN = 336, PLLP = 2, PLLQ = 7
     pub const PLL_CONFIG: u32 = 0x0740_3408;
 }
 
@@ -139,10 +127,12 @@ pub mod config {
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
-    // 1. Immediately disable stimulation (DC5)
+    // 1. Immediately disable stimulation (DC5) via atomic GPIO register write
+    //    PC13 is memory-mapped; word-sized store is atomic on Cortex-M.
     consent::Interlock::activate_safe_idle();
 
     // 2. Log panic to ATECC608B secure element slot 8 (secure log)
+    //    TODO: implement non-blocking I2C write in future revision
 
     // 3. Enter infinite breakpoint loop for debugger attachment
     loop {

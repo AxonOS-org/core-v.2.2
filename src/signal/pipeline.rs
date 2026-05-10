@@ -15,31 +15,22 @@
 //! | LDA classifier | 40.2 | 6,754 cycles / 168 MHz |
 //! | **Pipeline subtotal** | **640.2** | incl. SPSC push overhead |
 
-use super::{EegFrame, MotorImageryClass, Epoch};
+use super::{EegFrame, MotorImageryClass, Epoch, PipelineStage};
 use crate::ringbuf::SpscRingBuffer;
 use crate::config;
+use crate::consent::Interlock;
 
 /// Signal pipeline state
 pub struct SignalPipeline {
-    /// Kalman estimator
     kalman: crate::signal::kalman::KalmanEstimator,
-    /// FIR bandpass filter bank
     fir: crate::signal::fir::FirFilter,
-    /// Notch filter
     notch: crate::signal::notch::NotchFilter,
-    /// Artifact rejection
     artifact: crate::signal::artifact::ArtifactRejection,
-    /// CSP spatial filter
     csp: crate::signal::csp::CspFilter,
-    /// LDA classifier
     lda: crate::signal::lda::LdaClassifier,
-    /// Output ring buffer (to IPC)
     output: SpscRingBuffer<MotorImageryClass>,
-    /// Current epoch
     current_epoch: Option<Epoch>,
-    /// Pipeline execution counter
     epoch_count: u64,
-    /// Maximum observed execution time [µs]
     wcet_observed: u32,
 }
 
@@ -72,14 +63,14 @@ impl Default for PipelineConfig {
 
 impl SignalPipeline {
     /// Create new signal pipeline
-    pub fn new(config: PipelineConfig) -> Self {
+    pub fn new(cfg: PipelineConfig) -> Self {
         Self {
-            kalman: crate::signal::kalman::KalmanEstimator::new(config.channels),
-            fir: crate::signal::fir::FirFilter::new(config.fir_order, config.channels),
-            notch: crate::signal::notch::NotchFilter::new(config.sampling_rate),
-            artifact: crate::signal::artifact::ArtifactRejection::new(config.artifact_threshold_uv),
-            csp: crate::signal::csp::CspFilter::new(config.channels),
-            lda: crate::signal::lda::LdaClassifier::new(config.num_classes),
+            kalman: crate::signal::kalman::KalmanEstimator::new(cfg.channels),
+            fir: crate::signal::fir::FirFilter::new(cfg.fir_order, cfg.channels),
+            notch: crate::signal::notch::NotchFilter::new(cfg.sampling_rate),
+            artifact: crate::signal::artifact::ArtifactRejection::new(cfg.artifact_threshold_uv),
+            csp: crate::signal::csp::CspFilter::new(cfg.channels),
+            lda: crate::signal::lda::LdaClassifier::new(cfg.num_classes),
             output: SpscRingBuffer::new(),
             current_epoch: None,
             epoch_count: 0,
@@ -91,40 +82,32 @@ impl SignalPipeline {
     ///
     /// Called by scheduler at each ADC DMA completion interrupt.
     /// Must complete within 4 ms deadline.
-    ///
-    /// # Arguments
-    /// * `frame` — Raw EEG frame from ADC DMA (8 channels × 24-bit)
-    /// * `epoch` — Epoch metadata for timing measurement
-    ///
-    /// # Returns
-    /// Classifier output or None if artifact rejected
     pub fn process(&mut self, frame: EegFrame, epoch: Epoch) -> Option<MotorImageryClass> {
         self.current_epoch = Some(epoch);
         self.epoch_count += 1;
 
-        // Stage 1: Kalman state estimation
         let estimated = self.kalman.update(frame);
-
-        // Stage 2: FIR bandpass filtering (dominant stage: ~50% of WCET)
         let filtered = self.fir.process(estimated);
-
-        // Stage 3: Notch filter (50 Hz + 60 Hz powerline)
         let notched = self.notch.process(filtered);
 
-        // Stage 4: Artifact rejection (±120 µV threshold)
         if self.artifact.reject(notched) {
-            // Artifact detected — skip classification
             return None;
         }
 
-        // Stage 5: CSP spatial filtering
         let spatial = self.csp.project(notched);
-
-        // Stage 6: LDA classification
         let class = self.lda.classify(spatial);
 
-        // Push to output ring buffer (zero-copy via SPSC)
-        let _ = self.output.try_push(class);
+        // Push to output ring buffer — never silently drop
+        if let Err(_e) = self.output.try_push(class) {
+            // DC1 violation: signal path overrun
+            Interlock::activate_safe_idle();
+            crate::attestation::Attestation::log_violation(
+                crate::ipc::DcClause::Dc1,
+                crate::scheduler::TaskId(1),
+                epoch.start_us,
+            );
+            return None;
+        }
 
         // Update WCET observation
         if let Some(ref mut e) = self.current_epoch {
@@ -147,7 +130,7 @@ impl SignalPipeline {
         self.epoch_count
     }
 
-    /// Reset pipeline state (e.g., after session change)
+    /// Reset pipeline state
     pub fn reset(&mut self) {
         self.kalman.reset();
         self.fir.reset();
@@ -161,9 +144,11 @@ impl SignalPipeline {
 }
 
 /// Pipeline stage trait for modular composition
-trait PipelineStage {
+pub trait PipelineStage {
     type Input;
     type Output;
+    /// Process one sample
     fn process(&mut self, input: Self::Input) -> Self::Output;
+    /// Reset internal state
     fn reset(&mut self);
 }

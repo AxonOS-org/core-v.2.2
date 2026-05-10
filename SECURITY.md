@@ -4,20 +4,18 @@
 
 | Version | Supported |
 |---------|-----------|
-| 0.1.x   | ✅ Active development |
+| 0.2.x   | ✅ |
+| 0.1.x   | ❌ |
 
 ## Reporting a Vulnerability
 
-Please report security vulnerabilities to **security@axonos.org**.
+Please email security@axonos.org with:
+- Description of the vulnerability
+- Steps to reproduce
+- Impact assessment (safety-critical vs informational)
 
-Do not open public issues for security reports.
+## Response Timeline
 
-We will respond within 48 hours and provide a timeline for fix and disclosure.
-
-## Security Properties
-
-- Memory safety via Rust's type system (no buffer overflows)
-- Capability-based isolation (structural, not runtime)
-- HMAC attestation for all intent observations
-- Stimulation interlock with heartbeat monitoring
-- `#![forbid(unsafe_code)]` across all modules except two targeted SPSC blocks
+- Acknowledgment within 48 hours
+- Initial assessment within 5 business days
+- Patch release within 30 days for safety-critical issues

@@ -1,15 +1,9 @@
-//! Platform Abstraction Layer
+//! Platform abstraction layer
 //!
-//! Hardware-specific implementations for:
-//! - STM32F407 (Cortex-M4F @ 168 MHz)
-//! - STM32H573 (Cortex-M33 @ 250 MHz, TrustZone)
+//! DWT cycle counter, GPIO stubs, and core-local peripherals.
 
-pub mod cortex_m4f;
-pub mod cortex_m33;
 pub mod dwt;
 pub mod gpio;
-pub mod dma;
-pub mod spi;
-pub mod adc;
 
 pub use dwt::Dwt;
+pub use gpio::{GpioPin, GPIO_PC13};

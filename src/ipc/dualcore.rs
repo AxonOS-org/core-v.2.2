@@ -1,24 +1,30 @@
 //! Dual-Core Contract Implementation
 //!
 //! Partition model:
-//! - M4F (hard real-time): signal pipeline, consent state machine, stimulation interlock
-//! - A53 (soft real-time): session management, BLE/Wi-Fi egress, WebAssembly sandbox
+//! - M4F (hard real-time): signal pipeline, consent FSM, stimulation interlock
+//! - A53 (soft real-time): session management, BLE/Wi-Fi egress, WASM sandbox
 //! - Shared SRAM: 64-slot SPSC ring buffer (64 bytes/slot, 4096 bytes total)
+//!
+//! # Safety
+//! This struct must reside in shared SRAM with cache disabled or explicitly
+//! flushed. Use `#[repr(C)]` and linker section placement.
 
-use super::{DcClause, IpcLatency, ContractViolation};
+use super::{DcClause, ContractViolation};
 use crate::ringbuf::SpscRingBuffer;
 use crate::config;
+use core::sync::atomic::{AtomicU64, Ordering};
 
 /// Dual-core contract state machine
+#[repr(C)]
 pub struct DualCoreContract {
     /// Contract clauses and their status
     clauses: [ClauseStatus; 6],
-    /// Shared SPSC ring buffer
+    /// Shared SPSC ring buffer (must be in shared SRAM)
     shared_buffer: SpscRingBuffer<IntentPacket>,
     /// M4F heartbeat counter
-    heartbeat_count: u32,
-    /// Last heartbeat timestamp [µs]
-    last_heartbeat: u64,
+    heartbeat_count: AtomicU64,
+    /// Last heartbeat timestamp [µs] (64-bit DWT-extended)
+    last_heartbeat: AtomicU64,
     /// DC5 safe-idle state
     safe_idle_active: bool,
     /// Violation log
@@ -27,6 +33,7 @@ pub struct DualCoreContract {
 
 /// Intent packet for IPC
 #[derive(Debug, Clone, Copy)]
+#[repr(C)]
 pub struct IntentPacket {
     /// Intent class
     pub class: u8,
@@ -59,8 +66,8 @@ impl DualCoreContract {
         Self {
             clauses: [ClauseStatus::Pending; 6],
             shared_buffer: SpscRingBuffer::new(),
-            heartbeat_count: 0,
-            last_heartbeat: 0,
+            heartbeat_count: AtomicU64::new(0),
+            last_heartbeat: AtomicU64::new(0),
             safe_idle_active: false,
             violations: heapless::Vec::new(),
         }
@@ -79,11 +86,11 @@ impl DualCoreContract {
     /// M4F side: send heartbeat
     ///
     /// DC5: If ≥3 consecutive heartbeats missed, A53 enters safe-idle.
-    pub fn send_heartbeat(&mut self, timestamp: u64) {
-        self.heartbeat_count += 1;
-        self.last_heartbeat = timestamp;
+    pub fn send_heartbeat(&self, timestamp: u64) {
+        self.heartbeat_count.fetch_add(1, Ordering::Relaxed);
+        self.last_heartbeat.store(timestamp, Ordering::Release);
         self.safe_idle_active = false;
-        self.clauses[4] = ClauseStatus::Satisfied; // DC5
+        self.clauses[4] = ClauseStatus::Satisfied;
     }
 
     /// A53 side: check heartbeat
@@ -91,21 +98,18 @@ impl DualCoreContract {
     /// Returns true if heartbeat is valid (within timeout).
     /// Returns false if timeout exceeded — must enter safe-idle.
     pub fn check_heartbeat(&mut self, now: u64) -> bool {
-        let elapsed_ms = (now - self.last_heartbeat) / 1000;
+        let last = self.last_heartbeat.load(Ordering::Acquire);
+        let elapsed_ms = now.saturating_sub(last) / 1000;
 
         if elapsed_ms > config::SAFE_IDLE_TIMEOUT_MS as u64 {
-            // Heartbeat lost — activate safe-idle
             self.safe_idle_active = true;
             self.clauses[4] = ClauseStatus::Violated;
-
-            // Log violation
             let _ = self.violations.push(ContractViolation {
                 clause: DcClause::Dc5,
                 timestamp: now,
                 observed: Some(elapsed_ms as f32),
                 expected: Some(config::SAFE_IDLE_TIMEOUT_MS as f32),
             });
-
             false
         } else {
             true
@@ -136,8 +140,8 @@ impl DualCoreContract {
 
     /// Reset contract state
     pub fn reset(&mut self) {
-        self.heartbeat_count = 0;
-        self.last_heartbeat = 0;
+        self.heartbeat_count.store(0, Ordering::Relaxed);
+        self.last_heartbeat.store(0, Ordering::Relaxed);
         self.safe_idle_active = false;
         self.violations.clear();
     }

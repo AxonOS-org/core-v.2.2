@@ -1,12 +1,9 @@
-//! Consent State Machine and Stimulation Interlock
+//! Consent management
 //!
-//! DC5: Safe-idle on M4F heartbeat loss ≤12 ms [L2]
-//!
-//! The consent FSM manages user consent states and controls
-//! the stimulation interlock.
+//! FSM for user consent and stimulation interlock (DC5).
 
 pub mod fsm;
 pub mod interlock;
 
-pub use fsm::{ConsentFsm, ConsentState};
-pub use interlock::Interlock;
+pub use fsm::{ConsentFsm, ConsentState, ConsentOp, ConsentEvent};
+pub use interlock::{Interlock, InterlockState};

@@ -1,32 +1,23 @@
 # Contributing to AxonOS
 
-## Development Workflow
+## Development Setup
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Run the full test suite:
-   ```bash
-   cargo test --lib
-   cargo test --examples
-   cargo clippy --all-features -- -D warnings
-   cargo fmt --check
-   ```
-5. Commit with clear messages
-6. Open a Pull Request
+```bash
+rustup target add thumbv7em-none-eabihf thumbv8m.main-none-eabihf
+cargo install cargo-kani
+cargo install cargo-binutils
+```
 
 ## Code Standards
 
-- `#![forbid(unsafe_code)]` — no unsafe blocks without RFC approval
-- Every public item must be documented
-- Every quantitative claim must carry an evidence label [L1]/[L2]/[L3]/[pending]
-- Unit tests for all public functions
-- Kani proofs for safety-critical finite-state properties
+- All code must be `#![no_std]` compatible
+- Targeted `unsafe` requires a Kani proof or L3 evidence
+- Every quantitative claim requires an evidence label [L1/L2/L3]
+- Clippy warnings are treated as errors in CI
 
-## RFC Process
+## Pull Request Process
 
-For substantial architectural decisions, follow the [RFC process](https://github.com/AxonOS-org/axonos-rfcs).
-
-## Security
-
-Please report security issues to security@axonos.org. Do not open public issues.
+1. Open an RFC in `axonos-rfcs` for architectural changes
+2. Ensure `cargo test --lib` and `cargo kani --features kani` pass
+3. Update `docs/` and `CHANGELOG.md`
+4. Request review from @denis-yermakou

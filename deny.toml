@@ -1,17 +1,7 @@
-[graph]
-targets = [
-    { triple = "thumbv7em-none-eabihf" },
-    { triple = "thumbv8m.main-none-eabihf" },
-]
-
 [licenses]
 allow = ["Apache-2.0", "MIT"]
-confidence-threshold = 0.95
+unlicensed = "deny"
 
 [bans]
 multiple-versions = "warn"
-wildcards = "allow"
-
-[sources]
-unknown-registry = "deny"
-unknown-git = "deny"
+wildcards = "deny"

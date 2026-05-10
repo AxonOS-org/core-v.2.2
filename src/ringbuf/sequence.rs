@@ -1,113 +1,56 @@
-//! Sequence Number Protocol
+//! Sequence numbers for SPSC protocol
 //!
-//! Definition 6.1: Slot i of capacity-N ring (N = 2^k) has state:
-//! - Free: seq_i = i
-//! - Published: seq_i = i + 1
-//! - Consumed: seq_i = i + N
+//! Theorem 6.3: SPSC sequence-number correctness (Release-Acquire).
 
-use core::sync::atomic::{AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicU32, Ordering};
 
-/// Sequence number for ring buffer slot state
+/// Sequence number state machine:
+/// - seq == index      → Free (producer may write)
+/// - seq == index + 1  → Published (consumer may read)
+/// - seq == index + N  → Consumed (where N = capacity)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SequenceNumber(pub usize);
+pub struct SequenceNumber(pub u32);
 
-impl SequenceNumber {
-    /// Check if slot is Free (seq == index)
-    pub fn is_free(self, index: usize) -> bool {
-        self.0 == index
-    }
-
-    /// Check if slot is Published (seq == index + 1)
-    pub fn is_published(self, index: usize) -> bool {
-        self.0 == index + 1
-    }
-
-    /// Check if slot is Consumed (seq == index + N)
-    pub fn is_consumed(self, index: usize, capacity: usize) -> bool {
-        self.0 == index + capacity
-    }
-
-    /// Transition: Free -> Published
-    pub fn publish(self) -> Self {
-        SequenceNumber(self.0 + 1)
-    }
-
-    /// Transition: Published -> Consumed
-    pub fn consume(self, capacity: usize) -> Self {
-        SequenceNumber(self.0 + capacity - 1)
-    }
-
-    /// Get slot index from sequence number
-    pub fn slot_index(self, capacity: usize) -> usize {
-        self.0 % capacity
-    }
-}
-
-/// Atomic sequence number with Release-Acquire ordering
+/// Atomic sequence number with Release-Acquire semantics
 pub struct AtomicSequence {
-    inner: AtomicUsize,
+    inner: AtomicU32,
 }
 
 impl AtomicSequence {
-    /// Create new atomic sequence
-    pub const fn new(value: usize) -> Self {
-        Self {
-            inner: AtomicUsize::new(value),
-        }
+    /// Create new atomic sequence with initial value
+    pub const fn new(val: u32) -> Self {
+        Self { inner: AtomicU32::new(val) }
     }
 
-    /// Load with Acquire ordering (consumer side)
-    ///
-    /// synchronizes-with: producer's Release store
+    /// Load with Acquire ordering
+    #[inline]
     pub fn load_acquire(&self) -> SequenceNumber {
         SequenceNumber(self.inner.load(Ordering::Acquire))
     }
 
-    /// Store with Release ordering (producer side)
-    ///
-    /// Establishes synchronizes-with relationship with consumer's Acquire load
+    /// Store with Release ordering
+    #[inline]
     pub fn store_release(&self, seq: SequenceNumber) {
         self.inner.store(seq.0, Ordering::Release);
     }
-
-    /// Compare-and-swap with Acquire-Release ordering
-    pub fn compare_exchange(
-        &self,
-        current: SequenceNumber,
-        new: SequenceNumber,
-    ) -> Result<SequenceNumber, SequenceNumber> {
-        match self.inner.compare_exchange(
-            current.0,
-            new.0,
-            Ordering::AcqRel,
-            Ordering::Acquire,
-        ) {
-            Ok(prev) => Ok(SequenceNumber(prev)),
-            Err(prev) => Err(SequenceNumber(prev)),
-        }
-    }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_sequence_transitions() {
-        let seq = SequenceNumber(5);
-        assert!(seq.is_free(5));
-        assert!(!seq.is_published(5));
-
-        let published = seq.publish();
-        assert!(published.is_published(5));
-
-        let consumed = published.consume(64);
-        assert!(consumed.is_consumed(5, 64));
+impl SequenceNumber {
+    /// Check if slot is free for producer index `w`
+    #[inline]
+    pub fn is_free(&self, w: u32) -> bool {
+        self.0 == w
     }
 
-    #[test]
-    fn test_slot_index() {
-        let seq = SequenceNumber(70);
-        assert_eq!(seq.slot_index(64), 6);
+    /// Check if slot is published for consumer index `r`
+    #[inline]
+    pub fn is_published(&self, r: u32) -> bool {
+        self.0 == r.wrapping_add(1)
+    }
+
+    /// Check if slot is consumed (available for reuse)
+    #[inline]
+    pub fn is_consumed(&self, r: u32, capacity: u32) -> bool {
+        self.0 == r.wrapping_add(capacity)
     }
 }

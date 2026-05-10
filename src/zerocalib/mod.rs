@@ -1,15 +1,21 @@
-//! ZeroCalib Riemannian Classifier
+//! Riemannian classifier calibration
 //!
-//! ZeroCalib eliminates per-session calibration through transfer learning.
-//!
-//! Pipeline:
-//! 1. Universal MDM classifier (pre-trained on 127 subjects)
-//! 2. Euclidean alignment (domain shift reduction)
-//! 3. Online Riemannian mean update (geodesic gradient descent)
+//! Placeholder for geometric mean shift on SPD manifold.
 
-pub mod riemannian;
-pub mod mdm;
-pub mod alignment;
+use crate::signal::EegFrame;
 
-pub use mdm::MdmClassifier;
-pub use alignment::EuclideanAlignment;
+/// Riemannian zero-calibration
+pub struct ZeroCalib;
+
+impl ZeroCalib {
+    /// Update calibration with new frame
+    pub fn update(&mut self, _frame: EegFrame) {
+        // TODO: implement covariance estimation on SPD manifold
+    }
+
+    /// Apply calibration inverse
+    pub fn apply(&self, frame: EegFrame) -> EegFrame {
+        // Identity pass-through until calibrated
+        frame
+    }
+}

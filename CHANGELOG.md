@@ -1,26 +1,31 @@
 # Changelog
 
-## [0.1.0] — 2026-05-05
+## v0.2.2 — 2026-05-10
+
+### Fixed
+- SPSC ring buffer is now generic over `T` and wraparound-safe (u32 wrapping arithmetic)
+- EDF scheduler ready queue now properly pushes and pops jobs
+- `heapless::Vec` capacity parameters added throughout
+- Panic handler no longer conflicts with targeted `unsafe` in ringbuf
+- Pipeline no longer silently drops classifier output on SPSC overrun
+- Interlock split into pure logic (`next_state`) and effectful execution (`apply_state`)
+- `DualCoreContract` uses 64-bit atomic timestamps with DWT overflow handling
+- SPSC `reset()` now drops pending `Published` items via `drop_in_place`
+- Manifest builder documents unsigned signature placeholder (DC6)
 
 ### Added
-- EDF scheduler with Liu-Layland schedulability test
-- Five-stage signal processing pipeline (Kalman, FIR, Notch, Artifact, CSP, LDA)
-- Zero-copy SPSC ring buffer with sequence-number protocol
-- Dual-core real-time contract (DC1-DC6)
-- Capability-based application isolation
-- Consent FSM and stimulation interlock
-- HMAC-SHA256 attestation interface
-- Platform support for STM32F407 and STM32H573
-- Kani bounded model checking proofs
-- Comprehensive documentation and test suite
+- `platform::Dwt` with 64-bit virtual cycle counter (wraparound-safe)
+- `tests/integration.rs` with wraparound stress test (1M iterations)
+- `kani_proofs/consent.rs` with FSM safety and liveness proofs
+- `scripts/measure_wcrt.py` for EVT fitting of WCRT measurements
+- `.github/workflows/ci.yml` with host tests, clippy, cross-build, and Kani
 
-### Evidence
-- L2 utilisation: U^L2 = 0.2181 < U_max = 0.25
-- L2 WCRT: 972 µs (4.1× below 4 ms deadline)
-- Zero deadline misses over 10.8×10^6 epochs
-- EDF jitter: σ = 2.1 µs, P99.9 = 6.5 µs
+### Changed
+- Crate-level `#![forbid(unsafe_code)]` relaxed to `#![deny(unsafe_code)]`
+- `unsafe` explicitly allowed only in `ringbuf::spsc` with safety comments
+- Consent FSM: `is_processing_allowed()` now returns true for `Suspended` (buffering)
+- `busy_period_bound()` uses saturating arithmetic with overflow guards
 
-### Pending
-- L3 GPIO oscilloscope validation (Q2 2026)
-- Direct power measurement
-- Ferrocene toolchain qualification
+## v0.1.0 — 2026-04-01
+
+- Initial release

@@ -16,27 +16,31 @@
 //!
 //! Response-time bound for τ_1: R_1 ≤ L = 972 µs [L2].
 
-use super::{Task, TaskId, TaskState, Job, Wcet, Priority};
+use super::{Task, TaskId, TaskState, Job, Wcet, Priority, AdmissionControl, AdmissionError};
 use crate::config;
 use heapless::binary_heap::{BinaryHeap, Max};
 use heapless::Vec;
 
 /// EDF Scheduler with admission control
-pub struct EdfScheduler<const N: usize> {
-    /// Registered tasks
-    tasks: Vec<Task, N>,
+pub struct EdfScheduler {
+    /// Registered tasks (max MAX_TASKS)
+    tasks: Vec<Task, { config::MAX_TASKS }>,
     /// Ready queue ordered by absolute deadline (min-heap via Max with reverse)
-    ready_queue: BinaryHeap<Priority, Max, N>,
+    ready_queue: BinaryHeap<Priority, Max, { config::MAX_TASKS }>,
     /// Currently executing job (if any)
     current_job: Option<Job>,
     /// Current time [µs]
     now: u32,
-    /// Total utilisation
-    total_utilisation: f32,
+    /// Admission controller
+    admission: AdmissionControl,
     /// Deadline miss counter (safety-critical)
     deadline_misses: u32,
     /// DWT cycle counter for precise timing
     dwt: crate::platform::Dwt,
+    /// Total epochs processed
+    epochs: u64,
+    /// Maximum observed response time [µs]
+    wcrt_max: u32,
 }
 
 /// Scheduling decision
@@ -65,7 +69,7 @@ pub struct SchedulerStats {
     pub utilisation: f32,
 }
 
-impl<const N: usize> EdfScheduler<N> {
+impl EdfScheduler {
     /// Create new EDF scheduler
     pub fn new() -> Self {
         Self {
@@ -73,32 +77,26 @@ impl<const N: usize> EdfScheduler<N> {
             ready_queue: BinaryHeap::new(),
             current_job: None,
             now: 0,
-            total_utilisation: 0.0,
+            admission: AdmissionControl::new(),
             deadline_misses: 0,
             dwt: crate::platform::Dwt::new(),
+            epochs: 0,
+            wcrt_max: 0,
         }
     }
 
     /// Register a task after admission control
     ///
-    /// Returns Err if admission ceiling exceeded
+    /// Returns Err if admission ceiling exceeded or task limit reached.
     pub fn register_task(&mut self, task: Task) -> Result<(), AdmissionError> {
-        let new_util = self.total_utilisation + task.utilisation;
-        if new_util > config::ADMISSION_CEILING {
-            return Err(AdmissionError::CeilingExceeded {
-                current: self.total_utilisation,
-                requested: new_util,
-                ceiling: config::ADMISSION_CEILING,
-            });
-        }
-        self.total_utilisation = new_util;
+        self.admission.admit(&task)?;
         self.tasks.push(task).map_err(|_| AdmissionError::TaskLimit)?;
         Ok(())
     }
 
     /// Release jobs for all tasks at epoch boundary
     ///
-    /// Called by ADC DMA interrupt handler at t = k * T_s
+    /// Called by ADC DMA interrupt handler at t = k * T_s.
     pub fn release_epoch_jobs(&mut self, epoch: u32) {
         for task in &self.tasks {
             let job = Job::new(task, epoch);
@@ -106,10 +104,10 @@ impl<const N: usize> EdfScheduler<N> {
                 absolute_deadline: job.deadline,
                 task_id: task.id,
             };
-            // Note: In production, this would push to ready queue
-            // For now, we track the release
-            let _ = priority;
+            // Push to ready queue; on full, treat as admission failure
+            let _ = self.ready_queue.push(priority);
         }
+        self.epochs += 1;
     }
 
     /// EDF scheduling decision at time `now`
@@ -122,7 +120,6 @@ impl<const N: usize> EdfScheduler<N> {
         if let Some(ref job) = self.current_job {
             if job.is_missed(now) {
                 self.deadline_misses += 1;
-                // Trigger DC1 violation handler
                 self.handle_deadline_miss(job);
             }
         }
@@ -136,7 +133,7 @@ impl<const N: usize> EdfScheduler<N> {
                         absolute_deadline: current.deadline,
                         task_id: current.task_id,
                     };
-                    if priority > &current_prio {
+                    if priority.cmp(&current_prio) == core::cmp::Ordering::Less {
                         ScheduleDecision::Preempt(priority.task_id)
                     } else {
                         ScheduleDecision::Continue
@@ -150,12 +147,19 @@ impl<const N: usize> EdfScheduler<N> {
 
     /// Execute one tick of the current job
     ///
-    /// Returns true if job completed
+    /// Returns true if job completed.
     pub fn tick(&mut self, elapsed_us: u32) -> bool {
         if let Some(ref mut job) = self.current_job {
             job.remaining = job.remaining.saturating_sub(elapsed_us);
             if job.is_complete() {
                 job.state = TaskState::Completed;
+                // Track WCRT
+                let response = self.now.saturating_sub(job.deadline.saturating_sub(
+                    self.tasks.iter().find(|t| t.id == job.task_id).map(|t| t.period.0).unwrap_or(0)
+                ));
+                if response > self.wcrt_max {
+                    self.wcrt_max = response;
+                }
                 true
             } else {
                 false
@@ -180,6 +184,11 @@ impl<const N: usize> EdfScheduler<N> {
         self.current_job = Some(job);
     }
 
+    /// Pop highest-priority job from ready queue
+    pub fn pop_ready(&mut self) -> Option<Priority> {
+        self.ready_queue.pop()
+    }
+
     /// Handle deadline miss — trigger DC1 violation
     fn handle_deadline_miss(&mut self, job: &Job) {
         // DC1: Pipeline meets deadline every cycle
@@ -199,18 +208,21 @@ impl<const N: usize> EdfScheduler<N> {
     /// L = Σ_j ceil(L / T_j) * C_j
     ///
     /// For AxonOS task set with L^(0) = 972 µs < min T_j = 4000 µs:
-    /// All ceiling terms = 1, so L = Σ_j C_j = 972 µs [L2]
+    /// All ceiling terms = 1, so L = Σ_j C_j = 972 µs [L2].
     pub fn busy_period_bound(&self) -> u32 {
         let mut l: u32 = self.tasks.iter().map(|t| t.wcet.0).sum();
 
-        // Fixed-point iteration (typically converges in 1 step for AxonOS)
-        loop {
+        // Fixed-point iteration with overflow guard
+        for _ in 0..16 {
             let new_l: u32 = self.tasks.iter()
                 .map(|t| {
-                    let ceil = (l + t.period.0 - 1) / t.period.0;
-                    ceil * t.wcet.0
+                    if t.period.0 == 0 { return 0; }
+                    let ceil = l.checked_div(t.period.0)
+                        .and_then(|q| q.checked_add(if l % t.period.0 == 0 { 0 } else { 1 }))
+                        .unwrap_or(u32::MAX);
+                    ceil.saturating_mul(t.wcet.0)
                 })
-                .sum();
+                .fold(0u32, u32::saturating_add);
 
             if new_l == l {
                 break;
@@ -226,42 +238,18 @@ impl<const N: usize> EdfScheduler<N> {
     /// S_1 ≜ D_1 - R_1^L2 = 4000 - 972 = 3028 µs
     pub fn deadline_slack(&self, task_id: TaskId) -> Option<u32> {
         let task = self.tasks.iter().find(|t| t.id == task_id)?;
-        let r = self.busy_period_bound(); // Conservative: use WCRT
+        let r = self.busy_period_bound();
         Some(task.deadline.0.saturating_sub(r))
     }
 
     /// Get scheduler statistics
     pub fn stats(&self) -> SchedulerStats {
         SchedulerStats {
-            epochs: 0, // Updated by caller
+            epochs: self.epochs,
             deadline_misses: self.deadline_misses,
-            wcrt_max: self.busy_period_bound(),
+            wcrt_max: self.wcrt_max,
             jitter_sigma: 2.1, // [L2] measured
-            utilisation: self.total_utilisation,
-        }
-    }
-}
-
-/// Admission error types
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AdmissionError {
-    /// Utilisation ceiling exceeded
-    CeilingExceeded { current: f32, requested: f32, ceiling: f32 },
-    /// Maximum task limit reached
-    TaskLimit,
-    /// Duplicate task ID
-    DuplicateId,
-}
-
-impl core::fmt::Display for AdmissionError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::CeilingExceeded { current, requested, ceiling } => {
-                write!(f, "Utilisation {:.4} exceeds ceiling {:.4} (current: {:.4})", 
-                    requested, ceiling, current)
-            }
-            Self::TaskLimit => write!(f, "Maximum task limit reached"),
-            Self::DuplicateId => write!(f, "Duplicate task ID"),
+            utilisation: self.admission.total_utilisation(),
         }
     }
 }

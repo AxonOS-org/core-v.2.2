@@ -1,80 +1,38 @@
-//! Common Spatial Patterns (CSP) Filter
+//! Common Spatial Patterns filter (Stage 5)
 //!
-//! WCET: 100.0 µs = 16,800 cycles / 168 MHz [L1]
-//!
-//! CSP is a spatial filtering technique that maximizes the variance
-//! ratio between two motor imagery classes.
-//!
-//! For 4-class problems, we use one-vs-rest CSP filters.
+//! 8×8 spatial filter for motor imagery.
 
 use super::EegFrame;
 
 /// CSP spatial filter
 pub struct CspFilter {
-    /// Number of channels
-    channels: usize,
-    /// CSP projection matrix (8 × 8)
-    /// Pre-computed from training data
-    projection: [[f32; 8]; 8],
-    /// Log-variance features
-    logvar: [f32; 8],
+    /// Filter matrix (8×8)
+    w: [[f32; crate::config::EEG_CHANNELS]; crate::config::EEG_CHANNELS],
 }
 
 impl CspFilter {
-    /// Create CSP filter with pre-computed projection
-    pub fn new(channels: usize) -> Self {
-        assert!(channels <= 8);
-
-        // Identity initialization (will be replaced by trained projection)
-        let mut projection = [[0.0f32; 8]; 8];
-        for i in 0..channels {
-            projection[i][i] = 1.0;
+    /// Create with identity matrix (placeholder — trained offline)
+    pub fn new(_channels: usize) -> Self {
+        let mut w = [[0.0f32; crate::config::EEG_CHANNELS]; crate::config::EEG_CHANNELS];
+        for i in 0..crate::config::EEG_CHANNELS {
+            w[i][i] = 1.0;
         }
-
-        Self {
-            channels,
-            projection,
-            logvar: [0.0; 8],
-        }
+        Self { w }
     }
 
-    /// Load pre-computed CSP projection matrix
-    ///
-    /// Matrix is computed offline from calibration data using
-    /// generalized eigenvalue decomposition.
-    pub fn load_projection(&mut self, proj: &[[f32; 8]; 8]) {
-        self.projection = *proj;
-    }
-
-    /// Project EEG frame through CSP filters
-    ///
-    /// Returns log-variance features for LDA classification.
-    pub fn project(&mut self, frame: EegFrame) -> [f32; 8] {
-        let mut filtered = [0.0f32; 8];
-
-        // Spatial filtering: y = W * x
-        for i in 0..self.channels {
-            for j in 0..self.channels {
-                filtered[i] += self.projection[i][j] * (frame[j] as f32);
+    /// Project frame through CSP matrix
+    pub fn project(&mut self, frame: EegFrame) -> EegFrame {
+        let mut out = EegFrame::zero();
+        for i in 0..crate::config::EEG_CHANNELS {
+            let mut acc = 0.0f32;
+            for j in 0..crate::config::EEG_CHANNELS {
+                acc += self.w[i][j] * frame.channels[j] as f32;
             }
+            out.channels[i] = acc as i32;
         }
-
-        // Compute log-variance features
-        for i in 0..self.channels {
-            let var = filtered[i] * filtered[i];
-            self.logvar[i] = (var + 1e-6).ln();
-        }
-
-        self.logvar
+        out
     }
 
-    /// Get current log-variance features
-    pub fn features(&self) -> [f32; 8] {
-        self.logvar
-    }
-
-    /// Reset
-    pub fn reset(&mut self) {
-        self.logvar = [0.0; 8];
-    }
+    /// Reset (no adaptive state)
+    pub fn reset(&mut self) {}
 }

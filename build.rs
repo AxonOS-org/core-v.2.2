@@ -3,19 +3,9 @@ use std::fs;
 use std::path::PathBuf;
 
 fn main() {
-    let target = env::var("TARGET").unwrap();
-    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-
-    // Copy memory layout file for linker
-    if target.starts_with("thumb") {
-        let memory_x = PathBuf::from("memory.x");
-        if memory_x.exists() {
-            fs::copy(&memory_x, out_dir.join("memory.x")).unwrap();
-            println!("cargo:rustc-link-search={}", out_dir.display());
-        }
-    }
-
-    // Rebuild if configuration changes
-    println!("cargo:rerun-if-changed=memory.x");
-    println!("cargo:rerun-if-changed=link.x");
+    let out = PathBuf::from(env::var_os("OUT_DIR").unwrap());
+    let linker_script = env::var("AXONOS_LINKER_SCRIPT").unwrap_or_else(|_| "link.x".into());
+    fs::copy(&linker_script, out.join("link.x")).unwrap();
+    println!("cargo:rustc-link-search={}", out.display());
+    println!("cargo:rerun-if-changed={}", linker_script);
 }

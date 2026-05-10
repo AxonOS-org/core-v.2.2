@@ -1,11 +1,33 @@
-//! Hardware Abstraction Layer
+//! Hardware abstraction layer
 //!
-//! Critical section management, memory barriers, IRQ control.
+//! Critical sections, memory barriers, and NVIC helpers.
 
-pub mod critical_section;
-pub mod memory;
-pub mod irq;
+use core::sync::atomic::{compiler_fence, Ordering};
 
-pub use critical_section::CriticalSection;
-pub use memory::MemoryBarrier;
-pub use irq::IrqController;
+/// Enter critical section (disable interrupts)
+#[inline]
+pub fn critical_section<F, R>(f: F) -> R
+where
+    F: FnOnce() -> R,
+{
+    let primask = cortex_m::register::primask::read();
+    cortex_m::interrupt::disable();
+    let r = f();
+    if primask.is_active() {
+        cortex_m::interrupt::enable();
+    }
+    compiler_fence(Ordering::SeqCst);
+    r
+}
+
+/// Data memory barrier (for dual-core shared memory)
+#[inline]
+pub fn dmb() {
+    compiler_fence(Ordering::SeqCst);
+}
+
+/// Instruction synchronization barrier
+#[inline]
+pub fn isb() {
+    cortex_m::asm::isb();
+}

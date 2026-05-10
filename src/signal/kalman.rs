@@ -1,72 +1,51 @@
-//! Kalman State Estimator
+//! Kalman state estimator (Stage 1)
 //!
-//! WCET: 80.0 µs = 13,440 cycles / 168 MHz [L1]
-//!
-//! Simple Kalman filter per channel for DC drift removal and
-//! baseline estimation before bandpass filtering.
+//! Simple scalar Kalman filter per channel.
 
 use super::EegFrame;
 
 /// Kalman estimator per channel
 pub struct KalmanEstimator {
-    /// Number of channels
-    channels: usize,
     /// State estimate per channel [µV]
-    state: [f32; 8],
+    x: [f32; crate::config::EEG_CHANNELS],
     /// Error covariance per channel
-    covariance: [f32; 8],
-    /// Process noise variance
+    p: [f32; crate::config::EEG_CHANNELS],
+    /// Process noise covariance
     q: f32,
-    /// Measurement noise variance
+    /// Measurement noise covariance
     r: f32,
 }
 
 impl KalmanEstimator {
-    /// Create new Kalman estimator
-    pub fn new(channels: usize) -> Self {
-        assert!(channels <= 8);
+    /// Create new estimator
+    pub fn new(_channels: usize) -> Self {
         Self {
-            channels,
-            state: [0.0; 8],
-            covariance: [1.0; 8],
-            q: 0.01,  // Process noise
-            r: 100.0, // Measurement noise (ADC quantization)
+            x: [0.0; crate::config::EEG_CHANNELS],
+            p: [1.0; crate::config::EEG_CHANNELS],
+            q: 0.01,
+            r: 100.0,
         }
     }
 
-    /// Update estimator with new measurement
-    ///
-    /// Prediction: x̂_k|k-1 = x̂_k-1|k-1
-    ///             P_k|k-1 = P_k-1|k-1 + Q
-    /// Update:     K_k = P_k|k-1 / (P_k|k-1 + R)
-    ///             x̂_k|k = x̂_k|k-1 + K_k * (z_k - x̂_k|k-1)
-    ///             P_k|k = (1 - K_k) * P_k|k-1
-    pub fn update(&mut self, measurement: EegFrame) -> EegFrame {
-        let mut output = [0i32; 8];
-
-        for ch in 0..self.channels {
+    /// Update with new frame
+    pub fn update(&mut self, frame: EegFrame) -> EegFrame {
+        let mut out = EegFrame::zero();
+        for i in 0..crate::config::EEG_CHANNELS {
+            let z = frame.channels[i] as f32;
             // Prediction
-            let p_pred = self.covariance[ch] + self.q;
-
-            // Kalman gain
-            let k = p_pred / (p_pred + self.r);
-
+            let p_pred = self.p[i] + self.q;
             // Update
-            let z = measurement[ch] as f32;
-            let innovation = z - self.state[ch];
-            self.state[ch] += k * innovation;
-            self.covariance[ch] = (1.0 - k) * p_pred;
-
-            // Output: high-pass component (measurement - estimate)
-            output[ch] = innovation as i32;
+            let k = p_pred / (p_pred + self.r);
+            self.x[i] += k * (z - self.x[i]);
+            self.p[i] = (1.0 - k) * p_pred;
+            out.channels[i] = self.x[i] as i32;
         }
-
-        output
+        out
     }
 
-    /// Reset estimator
+    /// Reset state
     pub fn reset(&mut self) {
-        self.state = [0.0; 8];
-        self.covariance = [1.0; 8];
+        self.x = [0.0; crate::config::EEG_CHANNELS];
+        self.p = [1.0; crate::config::EEG_CHANNELS];
     }
 }

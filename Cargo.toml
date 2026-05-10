@@ -1,6 +1,6 @@
 [package]
 name = "axonos-kernel"
-version = "0.1.0"
+version = "0.2.2"
 edition = "2024"
 authors = ["Denis Yermakou <denis@axonos.org>"]
 description = "Safety-critical BCI microkernel for Cortex-M bare-metal Rust"
@@ -25,9 +25,6 @@ heapless = "0.8"
 bitflags = "2.6"
 const_format = "0.2"
 micromath = "2.1"
-
-[dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
 
 [profile.dev]
 opt-level = 1
