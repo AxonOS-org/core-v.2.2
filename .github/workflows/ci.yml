@@ -1,0 +1,187 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+
+jobs:
+  # ==========================================================================
+  # Job 1: Format check
+  # ==========================================================================
+  fmt:
+    name: Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - run: cargo fmt --check
+
+  # ==========================================================================
+  # Job 2: Clippy linting (all features)
+  # ==========================================================================
+  clippy:
+    name: Clippy Linting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          targets: thumbv7em-none-eabihf,thumbv8m.main-none-eabihf
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --all-features --target thumbv7em-none-eabihf -- -D warnings
+      - run: cargo clippy --all-features --target thumbv8m.main-none-eabihf -- -D warnings
+
+  # ==========================================================================
+  # Job 3: Host tests (lib + unit tests)
+  # ==========================================================================
+  test-lib:
+    name: Host Tests (Lib)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --lib --all-features
+
+  # ==========================================================================
+  # Job 4: Integration tests
+  # ==========================================================================
+  test-integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --test integration_tests --all-features
+      - run: cargo test --test schedulability_tests --all-features
+      - run: cargo test --test spsc_tests --all-features
+      - run: cargo test --test ipc_tests --all-features
+
+  # ==========================================================================
+  # Job 5: Check Cortex-M4F target
+  # ==========================================================================
+  check-m4f:
+    name: Check Cortex-M4F
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          targets: thumbv7em-none-eabihf
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --target thumbv7em-none-eabihf --features cortex-m4f
+
+  # ==========================================================================
+  # Job 6: Check Cortex-M33 target
+  # ==========================================================================
+  check-m33:
+    name: Check Cortex-M33
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          targets: thumbv8m.main-none-eabihf
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --target thumbv8m.main-none-eabihf --features cortex-m33,trustzone
+
+  # ==========================================================================
+  # Job 7: Build release (Cortex-M4F)
+  # ==========================================================================
+  build-m4f:
+    name: Build Release (M4F)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          targets: thumbv7em-none-eabihf
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --target thumbv7em-none-eabihf --features cortex-m4f --release
+
+  # ==========================================================================
+  # Job 8: Build release (Cortex-M33)
+  # ==========================================================================
+  build-m33:
+    name: Build Release (M33)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          targets: thumbv8m.main-none-eabihf
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --target thumbv8m.main-none-eabihf --features cortex-m33,trustzone --release
+
+  # ==========================================================================
+  # Job 9: Build examples
+  # ==========================================================================
+  build-examples:
+    name: Build Examples
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          targets: thumbv7em-none-eabihf,thumbv8m.main-none-eabihf
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --example basic_pipeline --target thumbv7em-none-eabihf --features cortex-m4f
+      - run: cargo build --example dualcore_demo --target thumbv7em-none-eabihf --features cortex-m4f
+      - run: cargo build --example consent_demo --target thumbv8m.main-none-eabihf --features cortex-m33,trustzone
+
+  # ==========================================================================
+  # Job 10: Documentation build + link check
+  # ==========================================================================
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo doc --no-deps --all-features --target thumbv7em-none-eabihf
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+      - run: |
+          cargo doc --no-deps --all-features --target thumbv7em-none-eabihf 2>&1 | grep -i "broken" && exit 1 || true
+
+  # ==========================================================================
+  # Job 11: License audit (cargo-deny)
+  # ==========================================================================
+  audit:
+    name: License Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v1
+        with:
+          command: check licenses
+
+  # ==========================================================================
+  # Job 12: Kani bounded model checking
+  # ==========================================================================
+  kani:
+    name: Kani Verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: model-checking/kani-github-action@v1
+        with:
+          kani-version: '0.54'
+      - run: cargo kani --features kani
+      - run: cargo kani --features kani --harness spsc_no_data_race
+      - run: cargo kani --features kani --harness spsc_push_wait_free
+      - run: cargo kani --features kani --harness spsc_memory_order
+      - run: cargo kani --features kani --harness heartbeat_safety
+      - run: cargo kani --features kani --harness heartbeat_liveness
+      - run: cargo kani --features kani --harness heartbeat_monotone
