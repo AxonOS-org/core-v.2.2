@@ -3,6 +3,11 @@
 
 Usage:
     python measure_wcrt.py --port /dev/ttyACM0 --epochs 1000000
+
+References:
+    - Castillo, E. (1988). *Extreme Value Theory in Engineering*.
+      Academic Press. [EVT fitting]
+    - AxonOS RFC-0003: Evidence Taxonomy.
 """
 
 import argparse
@@ -30,7 +35,6 @@ def main():
     print(f"Mean: {samples.mean():.1f} µs")
     print(f"Max:  {samples.max()} µs")
 
-    # Fit Generalized Extreme Value (EVT)
     shape, loc, scale = genextreme.fit(samples)
     p99 = genextreme.ppf(0.99, shape, loc=loc, scale=scale)
     print(f"EVT p99: {p99:.1f} µs")

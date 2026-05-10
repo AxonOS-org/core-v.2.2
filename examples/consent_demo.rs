@@ -16,7 +16,6 @@ fn main() -> ! {
     fsm.transition(ConsentOp::Grant, 1000);
     il.update(&fsm, true);
 
-    // Simulate heartbeat loss
     il.update(&fsm, false);
     il.update(&fsm, false);
     il.update(&fsm, false);

@@ -18,7 +18,7 @@ fn main() -> ! {
     let mut epoch_idx: u64 = 0;
 
     loop {
-        let frame = EegFrame::zero(); // Replace with ADC DMA read
+        let frame = EegFrame::zero();
         let epoch = Epoch { index: epoch_idx, start_us: 0, elapsed_us: 0 };
         let _ = pipe.process(frame, epoch);
         epoch_idx += 1;

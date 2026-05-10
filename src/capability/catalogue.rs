@@ -1,17 +1,16 @@
 //! Capability catalogue
+//!
+//! Defines the set of capabilities available to applications.
+//!
+//! Reference: AxonOS RFC-0004, Section 3.
 
 /// Application capability
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Capability {
-    /// Navigation cursor control
     Navigation,
-    /// Text entry via BCI
     TextEntry,
-    /// Environmental control (smart home)
     Environmental,
-    /// Neurostimulation feedback
     Stimulation,
-    /// Raw EEG access (highly restricted)
     RawEeg,
 }
 
@@ -32,7 +31,6 @@ impl Capability {
 pub struct Catalogue;
 
 impl Catalogue {
-    /// Check if capability is in kernel catalogue
     pub fn contains(cap: &Capability) -> bool {
         matches!(cap, Capability::Navigation | Capability::TextEntry | Capability::Environmental | Capability::Stimulation)
     }

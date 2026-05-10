@@ -4,26 +4,25 @@
 //! The kernel verifies M ⊆ K (manifest is subset of catalogue).
 //!
 //! DC6: Manifests are signed with HMAC-SHA256 (ATECC608B).
+//!
+//! References:
+//! - Miller et al. (2003). "Capability myths demolished." SRL TR.
+//! - AxonOS RFC-0004: Manifest Format and Verification.
 
 use super::{Capability, Catalogue};
 use heapless::Vec;
 
 /// Application manifest
-///
-/// Verified at install time. Cannot be modified at runtime.
 #[derive(Debug, Clone)]
 pub struct Manifest {
-    /// Application identifier
     pub app_id: heapless::String<64>,
-    /// Granted capabilities with rate limits
     pub capabilities: Vec<(Capability, u32), 4>,
-    /// Manifest version
     pub version: u32,
     /// HMAC-SHA256 signature (DC6)
+    /// TODO: integrate ATECC608B HMAC command for production.
     pub signature: [u8; 32],
 }
 
-/// Manifest builder
 pub struct ManifestBuilder {
     app_id: Option<heapless::String<64>>,
     capabilities: Vec<(Capability, u32), 4>,
@@ -31,7 +30,6 @@ pub struct ManifestBuilder {
 }
 
 impl ManifestBuilder {
-    /// Create new builder
     pub fn new() -> Self {
         Self {
             app_id: None,
@@ -40,7 +38,6 @@ impl ManifestBuilder {
         }
     }
 
-    /// Set application ID
     pub fn app_id(mut self, id: &str) -> Result<Self, ManifestError> {
         if id.len() > 64 {
             return Err(ManifestError::AppIdTooLong);
@@ -49,41 +46,32 @@ impl ManifestBuilder {
         Ok(self)
     }
 
-    /// Add capability with custom rate limit
-    pub fn capability_with_rate(
-        mut self,
-        cap: Capability,
-        rate_hz: u32,
-    ) -> Result<Self, ManifestError> {
+    pub fn capability_with_rate(mut self, cap: Capability, rate_hz: u32) -> Result<Self, ManifestError> {
         if !Catalogue::contains(&cap) {
             return Err(ManifestError::ProhibitedCapability);
         }
         if rate_hz > cap.max_rate_hz() {
             return Err(ManifestError::RateLimitExceeded);
         }
-        self.capabilities.push((cap, rate_hz))
-            .map_err(|_| ManifestError::TooManyCapabilities)?;
+        self.capabilities.push((cap, rate_hz)).map_err(|_| ManifestError::TooManyCapabilities)?;
         Ok(self)
     }
 
-    /// Add capability with default rate limit
     pub fn capability(self, cap: Capability) -> Result<Self, ManifestError> {
         self.capability_with_rate(cap, cap.max_rate_hz())
     }
 
-    /// Build unsigned manifest (signature must be added via ATECC608B)
     pub fn build(self) -> Result<Manifest, ManifestError> {
         let app_id = self.app_id.ok_or(ManifestError::MissingAppId)?;
         Ok(Manifest {
             app_id,
             capabilities: self.capabilities,
             version: self.version,
-            signature: [0u8; 32], // DC6: sign before install
+            signature: [0u8; 32],
         })
     }
 }
 
-/// Manifest error types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ManifestError {
     AppIdTooLong,

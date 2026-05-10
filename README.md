@@ -1,4 +1,4 @@
-# AxonOS Kernel v0.2.2
+# AxonOS Kernel v0.2.4
 
 **Safety-critical `#![no_std]` Rust microkernel for brain-computer interface systems**
 
@@ -10,15 +10,16 @@ AxonOS is a bare-metal real-time operating system for Cortex-M4F and Cortex-M33 
 - **Zero-Copy Signal Path**: Generic SPSC ring buffer from ADC DMA to classifier
 - **Capability Isolation**: Structural data minimisation at type-system level
 - **Dual-Core Contract**: Formal timing contract between M4F DSP and A53 app core
-- **Targeted Unsafe**: `#![deny(unsafe_code)]` crate-wide; explicit `unsafe` only in SPSC with proof invariants
+- **Targeted Unsafe**: `#![deny(unsafe_code)]` crate-wide; explicit `unsafe`
+  only in `ringbuf::spsc` with proof invariants
 
 ## Evidence Levels
 
 | Level | Method | Hardware |
 |-------|--------|----------|
-| [L1] | Instruction-count from assembly | None |
-| [L2] | DWT cycle counter | STM32F407 |
-| [L3] | Oscilloscope (Saleae Logic Pro 16) | STM32H573 |
+| [L1]  | Instruction-count from assembly | None |
+| [L2]  | DWT cycle counter | STM32F407 |
+| [L3]  | Oscilloscope (Saleae Logic Pro 16) | STM32H573 |
 
 ## Quick Start
 
@@ -93,7 +94,20 @@ cargo kani --features kani
 | K4 | Overrun detection | 8 | 2.0s |
 | K5 | Consent terminal | 12 | 2.3s |
 | K6 | Consent liveness | 12 | 1.8s |
+| K7 | Suspended permissions | 12 | 1.5s |
 
 ## License
 
 Dual-licensed under Apache-2.0 or MIT at your option.
+
+## Citation
+
+```bibtex
+@article{yermakou2026axonos,
+  title={AxonOS: Analytical Real-Time Schedulability, Structural Capability Isolation,
+         and Empirical Validation of a Safety-Critical Brain Computer Interface Microkernel},
+  author={Yermakou, Denis},
+  journal={arXiv preprint},
+  year={2026}
+}
+```

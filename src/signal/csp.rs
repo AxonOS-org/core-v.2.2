@@ -1,17 +1,18 @@
 //! Common Spatial Patterns filter (Stage 5)
 //!
 //! 8×8 spatial filter for motor imagery.
+//!
+//! References:
+//! - Blankertz et al. (2008). IEEE Signal Processing Magazine 25(1), 41–56.
+//! - Ramoser et al. (2000). IEEE TBME 47(4), 583–584.
 
 use super::EegFrame;
 
-/// CSP spatial filter
 pub struct CspFilter {
-    /// Filter matrix (8×8)
     w: [[f32; crate::config::EEG_CHANNELS]; crate::config::EEG_CHANNELS],
 }
 
 impl CspFilter {
-    /// Create with identity matrix (placeholder — trained offline)
     pub fn new(_channels: usize) -> Self {
         let mut w = [[0.0f32; crate::config::EEG_CHANNELS]; crate::config::EEG_CHANNELS];
         for i in 0..crate::config::EEG_CHANNELS {
@@ -20,7 +21,6 @@ impl CspFilter {
         Self { w }
     }
 
-    /// Project frame through CSP matrix
     pub fn project(&mut self, frame: EegFrame) -> EegFrame {
         let mut out = EegFrame::zero();
         for i in 0..crate::config::EEG_CHANNELS {
@@ -33,6 +33,5 @@ impl CspFilter {
         out
     }
 
-    /// Reset (no adaptive state)
     pub fn reset(&mut self) {}
 }

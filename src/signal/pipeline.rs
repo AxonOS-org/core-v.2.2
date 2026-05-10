@@ -3,7 +3,7 @@
 //! Zero-copy signal path from ADC DMA to classifier.
 //! No heap allocation on hot path.
 //!
-//! ## Pipeline Stages (Table 3)
+//! ## Pipeline Stages (Table 3, RFC-0004)
 //!
 //! | Stage | C_i (µs) | Derivation |
 //! |-------|----------|------------|
@@ -14,13 +14,17 @@
 //! | CSP spatial filter (8 × 8) | 100.0 | 16,800 cycles / 168 MHz |
 //! | LDA classifier | 40.2 | 6,754 cycles / 168 MHz |
 //! | **Pipeline subtotal** | **640.2** | incl. SPSC push overhead |
+//!
+//! References:
+//! - Blankertz et al. (2008). IEEE SPM 25(1), 41–56. [CSP]
+//! - Fukunaga (1990). *Introduction to Statistical Pattern Recognition*. [LDA]
+//! - Welch & Bishop (2006). TR 95-041. [Kalman]
 
 use super::{EegFrame, MotorImageryClass, Epoch, PipelineStage};
 use crate::ringbuf::SpscRingBuffer;
 use crate::config;
 use crate::consent::Interlock;
 
-/// Signal pipeline state
 pub struct SignalPipeline {
     kalman: crate::signal::kalman::KalmanEstimator,
     fir: crate::signal::fir::FirFilter,
@@ -34,18 +38,12 @@ pub struct SignalPipeline {
     wcet_observed: u32,
 }
 
-/// Pipeline configuration
 #[derive(Debug, Clone, Copy)]
 pub struct PipelineConfig {
-    /// FIR filter order
     pub fir_order: usize,
-    /// Number of EEG channels
     pub channels: usize,
-    /// ADC sampling rate [SPS]
     pub sampling_rate: u32,
-    /// Artifact rejection threshold [µV]
     pub artifact_threshold_uv: i32,
-    /// Number of LDA classes
     pub num_classes: usize,
 }
 
@@ -62,7 +60,6 @@ impl Default for PipelineConfig {
 }
 
 impl SignalPipeline {
-    /// Create new signal pipeline
     pub fn new(cfg: PipelineConfig) -> Self {
         Self {
             kalman: crate::signal::kalman::KalmanEstimator::new(cfg.channels),
@@ -78,28 +75,18 @@ impl SignalPipeline {
         }
     }
 
-    /// Process one epoch of EEG data
-    ///
-    /// Called by scheduler at each ADC DMA completion interrupt.
-    /// Must complete within 4 ms deadline.
     pub fn process(&mut self, frame: EegFrame, epoch: Epoch) -> Option<MotorImageryClass> {
         self.current_epoch = Some(epoch);
         self.epoch_count += 1;
-
         let estimated = self.kalman.update(frame);
         let filtered = self.fir.process(estimated);
         let notched = self.notch.process(filtered);
-
         if self.artifact.reject(notched) {
             return None;
         }
-
         let spatial = self.csp.project(notched);
         let class = self.lda.classify(spatial);
-
-        // Push to output ring buffer — never silently drop
         if let Err(_e) = self.output.try_push(class) {
-            // DC1 violation: signal path overrun
             Interlock::activate_safe_idle();
             crate::attestation::Attestation::log_violation(
                 crate::ipc::DcClause::Dc1,
@@ -108,29 +95,23 @@ impl SignalPipeline {
             );
             return None;
         }
-
-        // Update WCET observation
         if let Some(ref mut e) = self.current_epoch {
             let elapsed = e.elapsed_us;
             if elapsed > self.wcet_observed {
                 self.wcet_observed = elapsed;
             }
         }
-
         Some(class)
     }
 
-    /// Get observed WCET [µs]
     pub fn observed_wcet(&self) -> u32 {
         self.wcet_observed
     }
 
-    /// Get epoch count
     pub fn epoch_count(&self) -> u64 {
         self.epoch_count
     }
 
-    /// Reset pipeline state
     pub fn reset(&mut self) {
         self.kalman.reset();
         self.fir.reset();
@@ -143,12 +124,9 @@ impl SignalPipeline {
     }
 }
 
-/// Pipeline stage trait for modular composition
 pub trait PipelineStage {
     type Input;
     type Output;
-    /// Process one sample
     fn process(&mut self, input: Self::Input) -> Self::Output;
-    /// Reset internal state
     fn reset(&mut self);
 }

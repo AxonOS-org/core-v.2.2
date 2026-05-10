@@ -1,13 +1,20 @@
 //! Sequence numbers for SPSC protocol
 //!
-//! Theorem 6.3: SPSC sequence-number correctness (Release-Acquire).
+//! Theorem 6.3 (AxonOS RFC-0007): SPSC sequence-number correctness
+//! under Release-Acquire memory ordering.
+//!
+//! Proof sketch:
+//! 1. W --sb--> S (program order, producer thread)
+//! 2. S --sw--> L (Release-Acquire synchronizes-with pair)
+//! 3. L --sb--> R (program order, consumer thread)
+//! 4. By transitivity: W --hb--> R, so R observes W.
+//!
+//! See Batty et al. (2011) "Mathematizing C++ concurrency" POPL 2011
+//! for C11 memory model formalism.
 
 use core::sync::atomic::{AtomicU32, Ordering};
 
-/// Sequence number state machine:
-/// - seq == index      → Free (producer may write)
-/// - seq == index + 1  → Published (consumer may read)
-/// - seq == index + N  → Consumed (where N = capacity)
+/// Sequence number state machine
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SequenceNumber(pub u32);
 
@@ -17,18 +24,15 @@ pub struct AtomicSequence {
 }
 
 impl AtomicSequence {
-    /// Create new atomic sequence with initial value
     pub const fn new(val: u32) -> Self {
         Self { inner: AtomicU32::new(val) }
     }
 
-    /// Load with Acquire ordering
     #[inline]
     pub fn load_acquire(&self) -> SequenceNumber {
         SequenceNumber(self.inner.load(Ordering::Acquire))
     }
 
-    /// Store with Release ordering
     #[inline]
     pub fn store_release(&self, seq: SequenceNumber) {
         self.inner.store(seq.0, Ordering::Release);
@@ -36,19 +40,16 @@ impl AtomicSequence {
 }
 
 impl SequenceNumber {
-    /// Check if slot is free for producer index `w`
     #[inline]
     pub fn is_free(&self, w: u32) -> bool {
         self.0 == w
     }
 
-    /// Check if slot is published for consumer index `r`
     #[inline]
     pub fn is_published(&self, r: u32) -> bool {
         self.0 == r.wrapping_add(1)
     }
 
-    /// Check if slot is consumed (available for reuse)
     #[inline]
     pub fn is_consumed(&self, r: u32, capacity: u32) -> bool {
         self.0 == r.wrapping_add(capacity)

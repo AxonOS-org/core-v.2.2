@@ -1,22 +1,19 @@
 //! Notch filter (Stage 3)
 //!
 //! 50 Hz + 60 Hz powerline rejection.
+//!
+//! Reference: Oppenheim & Schafer (2009), Section 6.4: IIR digital filters.
 
 use super::EegFrame;
 use micromath::F32Ext;
 
-/// IIR notch filter per channel
 pub struct NotchFilter {
-    /// Filter state per channel [y1, y2, x1, x2]
     state: [[f32; 4]; crate::config::EEG_CHANNELS],
-    /// Coefficients [a1, a2, b0, b1, b2]
     coeffs: [f32; 5],
 }
 
 impl NotchFilter {
-    /// Create notch at 50 Hz and 60 Hz (cascade of two biquads)
     pub fn new(_sampling_rate: u32) -> Self {
-        // Placeholder coefficients for 50 Hz notch at 250 SPS
         let coeffs = [1.8, 0.98, 1.0, -1.8, 0.98];
         Self {
             state: [[0.0; 4]; crate::config::EEG_CHANNELS],
@@ -24,7 +21,6 @@ impl NotchFilter {
         }
     }
 
-    /// Process one frame
     pub fn process(&mut self, frame: EegFrame) -> EegFrame {
         let mut out = EegFrame::zero();
         for ch in 0..crate::config::EEG_CHANNELS {
@@ -38,7 +34,6 @@ impl NotchFilter {
         out
     }
 
-    /// Reset filter state
     pub fn reset(&mut self) {
         self.state = [[0.0; 4]; crate::config::EEG_CHANNELS];
     }

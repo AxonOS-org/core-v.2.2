@@ -25,3 +25,9 @@
 | K4 | Overrun detection | 8 | 2.0s |
 | K5 | Consent terminal | 12 | 2.3s |
 | K6 | Consent liveness | 12 | 1.8s |
+| K7 | Suspended permissions | 12 | 1.5s |
+
+## References
+
+- Castillo, E. (1988). *Extreme Value Theory in Engineering*. Academic Press.
+- AxonOS RFC-0003: Evidence Taxonomy.

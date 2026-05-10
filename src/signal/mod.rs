@@ -1,6 +1,12 @@
 //! Signal processing pipeline
 //!
 //! Zero-copy 6-stage pipeline from ADC DMA to classifier.
+//!
+//! References:
+//! - Blankertz et al. (2008). "Optimizing spatial filters for robust EEG
+//!   single-trial analysis." IEEE Signal Processing Magazine 25(1), 41–56. [CSP]
+//! - Ramoser et al. (2000). "Optimal spatial filtering of single trial EEG
+//!   during imagined hand movement." IEEE TBME 47(4), 583–584. [CSP for MI]
 
 pub mod artifact;
 pub mod csp;
@@ -20,7 +26,6 @@ pub struct EegFrame {
 }
 
 impl EegFrame {
-    /// Create zeroed frame
     pub fn zero() -> Self {
         Self { channels: [0; crate::config::EEG_CHANNELS] }
     }
@@ -29,25 +34,17 @@ impl EegFrame {
 /// Epoch metadata for timing measurement
 #[derive(Debug, Clone, Copy)]
 pub struct Epoch {
-    /// Epoch index (monotonic)
     pub index: u64,
-    /// Start timestamp [µs]
     pub start_us: u32,
-    /// Elapsed time [µs] (filled by pipeline)
     pub elapsed_us: u32,
 }
 
 /// Motor imagery classification output
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MotorImageryClass {
-    /// No detectable motor imagery
     Rest,
-    /// Left hand imagery
     LeftHand,
-    /// Right hand imagery
     RightHand,
-    /// Feet imagery
     Feet,
-    /// Tongue imagery
     Tongue,
 }

@@ -1,6 +1,6 @@
 [package]
 name = "axonos-kernel"
-version = "0.2.2"
+version = "0.2.4"
 edition = "2024"
 authors = ["Denis Yermakou <denis@axonos.org>"]
 description = "Safety-critical BCI microkernel for Cortex-M bare-metal Rust"

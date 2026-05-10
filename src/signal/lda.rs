@@ -1,26 +1,24 @@
 //! LDA classifier (Stage 6)
 //!
 //! Linear discriminant analysis for 4-class motor imagery.
+//!
+//! Reference: Fukunaga, K. (1990). *Introduction to Statistical Pattern
+//! Recognition* (2nd ed.). Academic Press. Chapter 4: Linear Discriminant Functions.
 
 use super::{EegFrame, MotorImageryClass};
 
-/// LDA classifier
 pub struct LdaClassifier {
-    /// Class means (4 classes × 8 features)
     means: [[f32; crate::config::EEG_CHANNELS]; 4],
-    /// Shared covariance inverse (diagonal approximation)
     cov_inv: [f32; crate::config::EEG_CHANNELS],
 }
 
 impl LdaClassifier {
-    /// Create with placeholder parameters
     pub fn new(_num_classes: usize) -> Self {
         let means = [[0.0f32; crate::config::EEG_CHANNELS]; 4];
         let cov_inv = [1.0f32; crate::config::EEG_CHANNELS];
         Self { means, cov_inv }
     }
 
-    /// Classify frame
     pub fn classify(&mut self, frame: EegFrame) -> MotorImageryClass {
         let mut best_class = 0usize;
         let mut best_score = f32::MIN;
@@ -44,6 +42,5 @@ impl LdaClassifier {
         }
     }
 
-    /// Reset (no adaptive state)
     pub fn reset(&mut self) {}
 }

@@ -6,11 +6,14 @@
 //! 1. M4F heartbeat lost (> 12 ms)
 //! 2. Consent withdrawn
 //! 3. DC1 deadline miss detected
+//!
+//! References:
+//! - STM32F4xx Reference Manual RM0090, Section 8: GPIOs.
+//! - AxonOS RFC-0002, Section 5: Safe-Idle Protocol.
 
 use super::{ConsentFsm, ConsentState};
 use crate::platform::gpio::{GpioPin, GPIO_PC13};
 
-/// GPIO for stimulation enable (active high)
 const STIM_ENABLE_PIN: GpioPin = GPIO_PC13;
 
 /// Stimulation interlock state
@@ -30,31 +33,25 @@ pub struct Interlock {
 }
 
 impl Interlock {
-    /// Create new interlock (starts in SafeIdle)
     pub fn new() -> Self {
         Self {
             state: InterlockState::SafeIdle,
             heartbeat_misses: 0,
-            max_heartbeat_misses: 3, // 3 × 4ms = 12ms
+            max_heartbeat_misses: 3,
             gpio_configured: false,
         }
     }
 
-    /// Initialize GPIO for stimulation control
     pub fn init_gpio(&mut self) {
         STIM_ENABLE_PIN.configure_output();
         STIM_ENABLE_PIN.set_low();
         self.gpio_configured = true;
     }
 
-    /// Activate safe-idle (disable stimulation) — callable from any context
-    ///
-    /// Uses atomic word-sized store to memory-mapped GPIO register.
     pub fn activate_safe_idle() {
         STIM_ENABLE_PIN.set_low();
     }
 
-    /// Pure logic: determine next interlock state
     pub fn next_state(
         current: InterlockState,
         consent: &ConsentFsm,
@@ -99,7 +96,6 @@ impl Interlock {
         }
     }
 
-    /// Apply state to hardware
     pub fn apply_state(state: InterlockState) {
         match state {
             InterlockState::Active => STIM_ENABLE_PIN.set_high(),
@@ -107,7 +103,6 @@ impl Interlock {
         }
     }
 
-    /// Update interlock (effectful)
     pub fn update(&mut self, consent: &ConsentFsm, heartbeat_valid: bool) {
         let (next, misses) = Self::next_state(
             self.state,
@@ -124,17 +119,14 @@ impl Interlock {
         self.heartbeat_misses = misses;
     }
 
-    /// Current state
     pub fn state(&self) -> InterlockState {
         self.state
     }
 
-    /// Check if stimulating
     pub fn is_stimulating(&self) -> bool {
         self.state == InterlockState::Active
     }
 
-    /// Reset interlock (from Error → SafeIdle)
     pub fn reset(&mut self) {
         self.state = InterlockState::SafeIdle;
         self.heartbeat_misses = 0;
@@ -154,10 +146,8 @@ impl Interlock {
     }
 }
 
-/// Global interlock instance
 static mut INTERLOCK: Option<Interlock> = None;
 
-/// Initialize global interlock
 pub fn init_interlock() {
     unsafe {
         INTERLOCK = Some(Interlock::new());
@@ -167,10 +157,6 @@ pub fn init_interlock() {
     }
 }
 
-/// Get mutable reference to global interlock
-///
-/// # Safety
-/// Must be called after init_interlock().
 pub unsafe fn interlock_mut() -> &'static mut Interlock {
     INTERLOCK.as_mut().unwrap()
 }

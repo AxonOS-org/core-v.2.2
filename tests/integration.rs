@@ -1,4 +1,6 @@
 //! Integration tests
+//!
+//! Tests full kernel workflows: scheduling, signal pipeline, consent, IPC.
 
 use axonos_kernel::scheduler::{EdfScheduler, Task, TaskId, AdmissionError};
 use axonos_kernel::ringbuf::SpscRingBuffer;
@@ -9,9 +11,9 @@ use axonos_kernel::config;
 #[test]
 fn test_edf_schedulability() {
     let mut sched = EdfScheduler::new();
-    let t1 = Task::new(TaskId(1), 818, 4000);   // signal pipeline
-    let t2 = Task::new(TaskId(2), 100, 4000);   // IPC
-    let t3 = Task::new(TaskId(3), 54, 4000);    // consent FSM
+    let t1 = Task::new(TaskId(1), 818, 4000);
+    let t2 = Task::new(TaskId(2), 100, 4000);
+    let t3 = Task::new(TaskId(3), 54, 4000);
     assert!(sched.register_task(t1).is_ok());
     assert!(sched.register_task(t2).is_ok());
     assert!(sched.register_task(t3).is_ok());
@@ -21,8 +23,8 @@ fn test_edf_schedulability() {
 #[test]
 fn test_admission_ceiling() {
     let mut sched = EdfScheduler::new();
-    let t1 = Task::new(TaskId(1), 1000, 4000); // U = 0.25
-    let t2 = Task::new(TaskId(2), 100, 4000);  // U = 0.025 → exceeds 0.25
+    let t1 = Task::new(TaskId(1), 1000, 4000);
+    let t2 = Task::new(TaskId(2), 100, 4000);
     assert!(sched.register_task(t1).is_ok());
     assert!(matches!(sched.register_task(t2), Err(AdmissionError::CeilingExceeded { .. })));
 }
@@ -42,7 +44,6 @@ fn test_signal_pipeline_wcet() {
     let frame = EegFrame::zero();
     let epoch = Epoch { index: 0, start_us: 0, elapsed_us: 0 };
     let result = pipe.process(frame, epoch);
-    // Pipeline should complete without panic
     assert!(result.is_some() || result.is_none());
     assert!(pipe.observed_wcet() < config::EPOCH_US);
 }

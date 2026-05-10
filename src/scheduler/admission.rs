@@ -1,8 +1,10 @@
 //! Admission control — Liu-Layland utilisation test
 //!
-//! Theorem 5.2: A set of n periodic tasks with D_i = T_i is schedulable
-//! under EDF iff Σ U_i ≤ 1.
-//! AxonOS uses conservative ceiling U_max = 0.25 (Proposition 5.4).
+//! Theorem 5.2 (Liu & Layland, 1973): A set of n periodic tasks with D_i = T_i
+//! is schedulable under EDF iff Σ U_i ≤ 1.
+//!
+//! AxonOS uses conservative ceiling U_max = 0.25 (Proposition 5.4, Yermakou 2026).
+//! See RFC-0001 for derivation of conservative ceiling.
 
 use super::{Task, TaskId};
 use crate::config;
@@ -10,13 +12,9 @@ use crate::config;
 /// Admission control error types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AdmissionError {
-    /// Utilisation ceiling exceeded
     CeilingExceeded { current: f32, requested: f32, ceiling: f32 },
-    /// Maximum task limit reached
     TaskLimit,
-    /// Duplicate task ID
     DuplicateId,
-    /// Zero period (division by zero)
     ZeroPeriod,
 }
 
@@ -41,7 +39,6 @@ pub struct AdmissionControl {
 }
 
 impl AdmissionControl {
-    /// Create new admission controller
     pub fn new() -> Self {
         Self {
             registered_ids: [false; config::MAX_TASKS],
@@ -49,7 +46,6 @@ impl AdmissionControl {
         }
     }
 
-    /// Attempt to admit a task
     pub fn admit(&mut self, task: &Task) -> Result<(), AdmissionError> {
         let idx = task.id.0 as usize;
         if idx == 0 || idx > config::MAX_TASKS {
@@ -74,12 +70,10 @@ impl AdmissionControl {
         Ok(())
     }
 
-    /// Total admitted utilisation
     pub fn total_utilisation(&self) -> f32 {
         self.total_utilisation
     }
 
-    /// Check if a task ID is already registered
     pub fn is_registered(&self, id: TaskId) -> bool {
         let idx = id.0 as usize;
         idx > 0 && idx <= config::MAX_TASKS && self.registered_ids[idx - 1]

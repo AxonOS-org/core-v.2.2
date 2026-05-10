@@ -1,17 +1,17 @@
 //! Consent Finite State Machine
 //!
-//! Manages user consent for BCI data processing and neurostimulation.
+//! Implements the MMP (Mental Privacy Protocol) consent model.
+//! See AxonOS RFC-0002 for state machine specification.
+//!
+//! Invariant: Withdrawn is terminal (no outgoing transitions).
+//! Verified by Kani proof K5.
 
 /// Consent state
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConsentState {
-    /// No consent given
     Inactive,
-    /// Consent active
     Active,
-    /// Consent temporarily suspended
     Suspended,
-    /// Consent permanently withdrawn (terminal)
     Withdrawn,
 }
 
@@ -32,7 +32,7 @@ pub enum ConsentOp {
     Withdraw,
 }
 
-/// Consent event (for logging)
+/// Consent event (for secure logging)
 #[derive(Debug, Clone, Copy)]
 pub struct ConsentEvent {
     pub op: ConsentOp,
@@ -41,7 +41,6 @@ pub struct ConsentEvent {
 }
 
 impl ConsentFsm {
-    /// Create new FSM in Inactive state
     pub fn new() -> Self {
         Self {
             state: ConsentState::Inactive,
@@ -51,9 +50,6 @@ impl ConsentFsm {
         }
     }
 
-    /// Process consent operation
-    ///
-    /// Returns new state or None if operation invalid in current state.
     pub fn transition(&mut self, op: ConsentOp, timestamp: u64) -> Option<ConsentState> {
         let new_state = match (self.state, op) {
             (ConsentState::Inactive, ConsentOp::Grant) => {
@@ -75,38 +71,29 @@ impl ConsentFsm {
             (ConsentState::Withdrawn, _) => None,
             _ => None,
         };
-
         if let Some(s) = new_state {
             self.state = s;
         }
         new_state
     }
 
-    /// Current state
     pub fn state(&self) -> ConsentState {
         self.state
     }
 
-    /// Check if data processing is allowed
-    ///
-    /// Processing is allowed in Active and Suspended (buffering only).
     pub fn is_processing_allowed(&self) -> bool {
         matches!(self.state, ConsentState::Active | ConsentState::Suspended)
     }
 
-    /// Check if stimulation is allowed
-    ///
-    /// Stimulation requires explicit Active consent.
     pub fn is_stimulation_allowed(&self) -> bool {
         matches!(self.state, ConsentState::Active)
     }
 
-    /// Check if consent is withdrawn (terminal)
     pub fn is_withdrawn(&self) -> bool {
         matches!(self.state, ConsentState::Withdrawn)
     }
 
-    /// Reset FSM (for testing)
+    #[cfg(test)]
     pub fn reset(&mut self) {
         self.state = ConsentState::Inactive;
         self.consent_time = 0;
@@ -126,11 +113,9 @@ mod tests {
         assert_eq!(fsm.transition(ConsentOp::Grant, 1000), Some(ConsentState::Active));
         assert!(fsm.is_processing_allowed());
         assert!(fsm.is_stimulation_allowed());
-
         assert_eq!(fsm.transition(ConsentOp::Suspend, 2000), Some(ConsentState::Suspended));
         assert!(fsm.is_processing_allowed());
         assert!(!fsm.is_stimulation_allowed());
-
         assert_eq!(fsm.transition(ConsentOp::Resume, 3000), Some(ConsentState::Active));
         assert_eq!(fsm.transition(ConsentOp::Withdraw, 4000), Some(ConsentState::Withdrawn));
         assert!(fsm.is_withdrawn());

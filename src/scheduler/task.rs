@@ -1,4 +1,7 @@
 //! Task descriptor types
+//!
+//! See Liu & Layland (1973), Theorem 5.2 for schedulability foundation.
+//! See Buttazzo (2011), Section 5.5.1 for busy period analysis.
 
 use core::cmp::Ordering;
 
@@ -21,36 +24,26 @@ pub struct Period(pub u32);
 /// Task state
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TaskState {
-    /// Task is ready to run
     Ready,
-    /// Task is currently running
     Running,
-    /// Task completed this period
     Completed,
-    /// Task missed its deadline
     Missed,
 }
 
 /// Periodic task descriptor
 #[derive(Debug, Clone)]
 pub struct Task {
-    /// Unique task ID
     pub id: TaskId,
-    /// Worst-case execution time [µs]
     pub wcet: Wcet,
-    /// Relative deadline [µs] (D_i = T_i for implicit deadline)
     pub deadline: Deadline,
-    /// Period [µs]
     pub period: Period,
-    /// Utilisation U_i = C_i / T_i
     pub utilisation: f32,
-    /// Current state
     pub state: TaskState,
 }
 
 impl Task {
-    /// Create a new periodic task with implicit deadline
     pub fn new(id: TaskId, wcet_us: u32, period_us: u32) -> Self {
+        debug_assert!(period_us > 0, "Task period must be > 0 (RFC-0001 §3.2)");
         let util = wcet_us as f32 / period_us as f32;
         Self {
             id,
@@ -66,18 +59,13 @@ impl Task {
 /// Job instance released at epoch boundary
 #[derive(Debug, Clone)]
 pub struct Job {
-    /// Parent task ID
     pub task_id: TaskId,
-    /// Absolute deadline [µs]
     pub deadline: u32,
-    /// Remaining execution time [µs]
     pub remaining: u32,
-    /// Job state
     pub state: TaskState,
 }
 
 impl Job {
-    /// Instantiate a job from a task at given epoch
     pub fn new(task: &Task, epoch: u32) -> Self {
         let abs_deadline = epoch.saturating_add(task.deadline.0);
         Self {
@@ -88,12 +76,10 @@ impl Job {
         }
     }
 
-    /// Check if job missed its deadline at time `now`
     pub fn is_missed(&self, now: u32) -> bool {
         self.state != TaskState::Completed && now > self.deadline
     }
 
-    /// Check if job is complete
     pub fn is_complete(&self) -> bool {
         self.remaining == 0
     }
@@ -102,9 +88,7 @@ impl Job {
 /// EDF priority (earlier deadline = higher priority)
 #[derive(Debug, Clone, Copy)]
 pub struct Priority {
-    /// Absolute deadline [µs]
     pub absolute_deadline: u32,
-    /// Task ID for tie-breaking
     pub task_id: TaskId,
 }
 
@@ -118,7 +102,6 @@ impl Eq for Priority {}
 
 impl PartialOrd for Priority {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        // Reverse ordering for min-heap via Max heap
         other.absolute_deadline.partial_cmp(&self.absolute_deadline)
             .map(|o| if o == Ordering::Equal { other.task_id.0.cmp(&self.task_id.0) } else { o })
     }

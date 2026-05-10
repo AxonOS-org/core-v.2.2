@@ -25,6 +25,11 @@
 //! - Producer holds exclusive access to Free slots
 //! - Consumer reads only after observing Published state
 //! - Both indices are monotonic u32 with wraparound-safe arithmetic
+//!
+//! References:
+//! - Vyukov, D. (2010). "Lock-free algorithms: The queue and the ring buffer."
+//! - Batty et al. (2011). "Mathematizing C++ concurrency." POPL 2011.
+//! - AxonOS RFC-0007: SPSC Sequence-Number Correctness Proof.
 
 #![allow(unsafe_code)]
 
@@ -36,20 +41,15 @@ use core::mem::MaybeUninit;
 /// SPSC ring buffer error types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SpscError {
-    /// Ring buffer full (producer overrun)
     Overrun,
-    /// Ring buffer empty (consumer underrun)
     Underrun,
-    /// Slot state inconsistency (protocol violation)
     ProtocolViolation,
 }
 
 /// Ring buffer configuration
 #[derive(Debug, Clone, Copy)]
 pub struct RingBufferConfig {
-    /// Capacity (must be power of 2)
     pub capacity: usize,
-    /// Slot size [bytes] — informational only
     pub slot_size: usize,
 }
 
@@ -65,21 +65,15 @@ impl Default for RingBufferConfig {
 /// Single-producer single-consumer ring buffer
 ///
 /// Capacity must be power of 2 (enforced at compile time via config).
+/// Generic over `T` to support any Copy or owned type.
 pub struct SpscRingBuffer<T> {
-    /// Buffer slots (uninitialized until published)
     buffer: [MaybeUninit<T>; config::RING_BUFFER_CAPACITY],
-    /// Sequence numbers for each slot
     sequences: [AtomicSequence; config::RING_BUFFER_CAPACITY],
-    /// Producer write index (monotonically increasing, wraps at u32::MAX)
     write_index: AtomicU32,
-    /// Consumer read index (monotonically increasing, wraps at u32::MAX)
     read_index: AtomicU32,
 }
 
 impl<T> SpscRingBuffer<T> {
-    /// Create new SPSC ring buffer
-    ///
-    /// All slots initialized to Free state (seq = index).
     pub fn new() -> Self {
         let sequences = core::array::from_fn(|i| AtomicSequence::new(i as u32));
         Self {
@@ -90,106 +84,64 @@ impl<T> SpscRingBuffer<T> {
         }
     }
 
-    /// Producer: push value to ring buffer
-    ///
-    /// Wait-free: completes in O(1) steps regardless of consumer state.
-    /// Returns Err(Overrun) if buffer full — caller must handle DC1 violation.
     pub fn try_push(&self, value: T) -> Result<(), SpscError> {
         let w = self.write_index.load(Ordering::Relaxed);
         let cap = config::RING_BUFFER_CAPACITY as u32;
         let slot_idx = (w % cap) as usize;
-
-        // Check slot state with Acquire ordering
         let seq = self.sequences[slot_idx].load_acquire();
-
         if !seq.is_free(w) {
             return Err(SpscError::Overrun);
         }
-
-        // Write payload
-        // SAFETY: We hold exclusive access (seq == w means Free state).
-        // No other thread can write this slot until consumer marks it consumed.
         unsafe {
             core::ptr::write(self.buffer[slot_idx].as_mut_ptr(), value);
         }
-
-        // Publish: seq = w + 1 (Published state) with Release ordering
         self.sequences[slot_idx].store_release(SequenceNumber(w.wrapping_add(1)));
-
-        // Advance write index (Relaxed is sufficient — Release on seq provides ordering)
         self.write_index.store(w.wrapping_add(1), Ordering::Relaxed);
-
         Ok(())
     }
 
-    /// Consumer: pop value from ring buffer
-    ///
-    /// Lock-free: may spin briefly if producer is mid-write.
-    /// Returns Err(Underrun) if buffer empty.
     pub fn try_pop(&self) -> Result<T, SpscError> {
         let r = self.read_index.load(Ordering::Relaxed);
         let cap = config::RING_BUFFER_CAPACITY as u32;
         let slot_idx = (r % cap) as usize;
-
-        // Check slot state with Acquire ordering
         let seq = self.sequences[slot_idx].load_acquire();
-
         if !seq.is_published(r) {
             return Err(SpscError::Underrun);
         }
-
-        // Read payload
-        // SAFETY: We verified slot is Published (seq == r + 1).
-        // Producer has finished writing and published before this load.
         let value = unsafe {
             core::ptr::read(self.buffer[slot_idx].as_ptr())
         };
-
-        // Consume: seq = r + N (Consumed state) with Release ordering
         let consumed_seq = SequenceNumber(r.wrapping_add(cap));
         self.sequences[slot_idx].store_release(consumed_seq);
-
-        // Advance read index
         self.read_index.store(r.wrapping_add(1), Ordering::Relaxed);
-
         Ok(value)
     }
 
-    /// Check if buffer is full
     pub fn is_full(&self) -> bool {
         let w = self.write_index.load(Ordering::Relaxed);
         let r = self.read_index.load(Ordering::Relaxed);
         let cap = config::RING_BUFFER_CAPACITY as u32;
-        // Wraparound-safe: distance from r to w
         w.wrapping_sub(r) >= cap
     }
 
-    /// Check if buffer is empty
     pub fn is_empty(&self) -> bool {
         let w = self.write_index.load(Ordering::Relaxed);
         let r = self.read_index.load(Ordering::Relaxed);
         w == r
     }
 
-    /// Count of available items
     pub fn len(&self) -> usize {
         let w = self.write_index.load(Ordering::Relaxed);
         let r = self.read_index.load(Ordering::Relaxed);
         w.wrapping_sub(r) as usize
     }
 
-    /// Reset ring buffer (for recovery)
-    ///
-    /// # Safety
-    /// Must only be called when producer and consumer are quiescent.
-    /// Drops any Published items to avoid leaks.
     pub unsafe fn reset(&self) {
         let cap = config::RING_BUFFER_CAPACITY;
         for i in 0..cap {
             let seq = self.sequences[i].load_acquire();
             let r = self.read_index.load(Ordering::Relaxed);
             if seq.is_published(r) {
-                // Drop pending item
                 core::ptr::drop_in_place(self.buffer[i].as_mut_ptr());
             }
             self.sequences[i].store_release(SequenceNumber(i as u32));
@@ -199,12 +151,10 @@ impl<T> SpscRingBuffer<T> {
     }
 }
 
-// Kani proof harnesses (compiled only with kani feature)
 #[cfg(feature = "kani")]
 mod proofs {
     use super::*;
 
-    /// K1: No data race
     #[kani::proof]
     #[kani::unwind(8)]
     fn spsc_no_data_race() {
@@ -216,7 +166,6 @@ mod proofs {
         }
     }
 
-    /// K2: Wait-freedom
     #[kani::proof]
     #[kani::unwind(4)]
     fn spsc_push_wait_free() {
@@ -225,7 +174,6 @@ mod proofs {
         let _ = ring.try_push(value);
     }
 
-    /// K3: Memory ordering / payload integrity
     #[kani::proof]
     #[kani::unwind(2)]
     fn spsc_memory_order() {
@@ -234,6 +182,16 @@ mod proofs {
         ring.try_push(w).unwrap();
         let r = ring.try_pop().unwrap();
         assert_eq!(r, w);
+    }
+
+    #[kani::proof]
+    #[kani::unwind(8)]
+    fn spsc_overrun_detected() {
+        let ring: SpscRingBuffer<u32> = SpscRingBuffer::new();
+        for _ in 0..config::RING_BUFFER_CAPACITY {
+            let _ = ring.try_push(0u32);
+        }
+        assert!(ring.try_push(1u32).is_err());
     }
 }
 
@@ -266,10 +224,22 @@ mod tests {
     #[test]
     fn test_wraparound() {
         let ring: SpscRingBuffer<u32> = SpscRingBuffer::new();
-        // Fill and drain repeatedly to exercise wraparound
         for _ in 0..10_000 {
             assert!(ring.try_push(1).is_ok());
             assert_eq!(ring.try_pop().unwrap(), 1);
+        }
+    }
+
+    #[test]
+    fn test_wraparound_32bit() {
+        let ring: SpscRingBuffer<u32> = SpscRingBuffer::new();
+        ring.write_index.store(u32::MAX - 5, Ordering::Relaxed);
+        ring.read_index.store(u32::MAX - 5, Ordering::Relaxed);
+        for i in 0..10 {
+            assert!(ring.try_push(i).is_ok());
+        }
+        for i in 0..10 {
+            assert_eq!(ring.try_pop().unwrap(), i);
         }
     }
 }

@@ -13,6 +13,7 @@ cargo install cargo-binutils
 - All code must be `#![no_std]` compatible
 - Targeted `unsafe` requires a Kani proof or L3 evidence
 - Every quantitative claim requires an evidence label [L1/L2/L3]
+- All modules must include academic references in doc comments
 - Clippy warnings are treated as errors in CI
 
 ## Pull Request Process

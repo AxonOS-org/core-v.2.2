@@ -7,7 +7,6 @@
 use axonos_kernel::ringbuf::SpscRingBuffer;
 use axonos_kernel::config;
 
-/// K1: No data race + payload integrity
 #[kani::proof]
 #[kani::unwind(8)]
 fn spsc_no_data_race() {
@@ -19,7 +18,6 @@ fn spsc_no_data_race() {
     }
 }
 
-/// K2: Wait-freedom (push returns in bounded steps)
 #[kani::proof]
 #[kani::unwind(4)]
 fn spsc_push_wait_free() {
@@ -28,7 +26,6 @@ fn spsc_push_wait_free() {
     let _ = ring.try_push(value);
 }
 
-/// K3: Memory ordering / payload integrity
 #[kani::proof]
 #[kani::unwind(2)]
 fn spsc_memory_order() {
@@ -39,7 +36,6 @@ fn spsc_memory_order() {
     assert_eq!(r, w);
 }
 
-/// K4: Overrun detection
 #[kani::proof]
 #[kani::unwind(8)]
 fn spsc_overrun_detected() {
