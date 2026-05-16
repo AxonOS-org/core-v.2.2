@@ -1,53 +1,45 @@
-[package]
-name = "axonos-kernel"
-version = "0.3.7"
-edition = "2024"
-authors = ["Denis Yermakou <denis@axonos.org>"]
-description = "Safety-critical BCI microkernel for Cortex-M bare-metal Rust"
+[workspace]
+resolver = "2"
+members = [
+    "axonos-spsc",
+    "axonos-scheduler",
+    "axonos-capability",
+    "axonos-time",
+    "axonos-intent",
+    "axonos-kernel-core",
+]
+exclude = [
+    "axonos-spsc/kani-proofs",
+    "axonos-scheduler/kani-proofs",
+    "axonos-capability/kani-proofs",
+    "axonos-time/kani-proofs",
+    "axonos-intent/kani-proofs",
+    "axonos-firmware-stm32f407",
+]
+
+[workspace.package]
+version = "0.1.7"
+edition = "2021"
+rust-version = "1.75"
 license = "Apache-2.0 OR MIT"
-repository = "https://github.com/AxonOS-org/axonos-kernel"
-keywords = ["bci", "rtos", "real-time", "rust", "embedded"]
-categories = ["embedded", "no-std", "os"]
-rust-version = "1.85.0"
+repository = "https://github.com/AxonOS-org/AxonOS-kernel"
+authors = ["Denis Yermakou <denis@axonos.org>"]
 
-[features]
-default = ["cortex-m4f"]
-cortex-m4f = []
-cortex-m33 = ["trustzone"]
-trustzone = []
-kani = []
-
-[dependencies]
-cortex-m = { version = "0.7", features = ["critical-section-single-core"] }
-cortex-m-rt = "0.7"
-panic-halt = "0.2"
-heapless = "0.8"
-bitflags = "2.6"
-const_format = "0.2"
-micromath = "2.1"
-
-[profile.dev]
-opt-level = 1
-lto = false
+[workspace.lints.clippy]
+# Lint *groups* must have a lower priority than individual lint overrides
+# (clippy::lint_groups_priority, Rust 1.85+). Otherwise the overrides are
+# ambiguous because table order is not significant in TOML.
+all = { level = "deny", priority = -1 }
+missing_errors_doc = "allow"
 
 [profile.release]
-opt-level = 3
+codegen-units = 1
+lto = "fat"
+panic = "abort"
+debug = true
+opt-level = "s"
+
+[profile.bench]
 codegen-units = 1
 lto = "fat"
 debug = true
-panic = "abort"
-
-[[example]]
-name = "basic_pipeline"
-required-features = ["cortex-m4f"]
-
-[[example]]
-name = "dualcore_demo"
-required-features = ["cortex-m4f"]
-
-[[example]]
-name = "consent_demo"
-required-features = ["cortex-m33", "trustzone"]
-
-[package.metadata.docs.rs]
-targets = ["thumbv7em-none-eabihf", "thumbv8m.main-none-eabihf"]
