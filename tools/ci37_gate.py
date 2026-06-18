@@ -69,6 +69,11 @@ BINARY_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".wasm", ".
 GENERATED_PREFIXES = ("target/", "dist/", "build/", "coverage/", ".next/", "node_modules/")
 MAX_FILE_BYTES = 2_000_000
 
+CLAIM_SCAN_SKIP = {
+    "tools/ci37_gate.py",
+    "docs/CI_37_FOUNDATION_GATES.md",
+}
+
 FORBIDDEN_UNQUALIFIED = [
     "fda approved",
     "clinically proven",
@@ -430,21 +435,28 @@ def gate_35() -> int:
 def gate_36() -> int:
     bad = []
     for name in tracked():
+        if name in CLAIM_SCAN_SKIP:
+            continue
+
         p = ROOT / name
         if p.suffix.lower() in BINARY_SUFFIXES:
             continue
+
         try:
             text = p.read_text(encoding="utf-8", errors="ignore")
         except Exception:
             continue
+
         for line_no, line in enumerate(text.splitlines(), 1):
             low = line.lower()
             for phrase in FORBIDDEN_UNQUALIFIED:
                 pos = low.find(phrase)
                 if pos != -1 and not claim_allowed(low, pos):
                     bad.append(f"{name}:{line_no}:{phrase}")
+
     if bad:
         return fail("forbidden unqualified claims: " + ", ".join(bad[:8]))
+
     return ok("public claim hygiene clean")
 
 
