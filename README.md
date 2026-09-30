@@ -432,8 +432,6 @@ post-fork compliance burden (which is small).
 
 [axonos.org](https://axonos.org) · [medium.com/@AxonOS](https://medium.com/@AxonOS) · [github.com/AxonOS-org](https://github.com/AxonOS-org)
 
-Zurich · Berlin · Milano · San Mateo · Singapore
-
 <sub>Made with 🦀 and a long real-time tick.</sub>
 
 </div>
