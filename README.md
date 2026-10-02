@@ -20,6 +20,7 @@ seven crates · 3 603 lines · 28 formal proofs · 66 tests · zero unsafe outsi
 [![Cortex-M33](https://img.shields.io/badge/target-Cortex--M33-purple?style=flat-square)](https://doc.rust-lang.org/rustc/platform-support/thumbv8m.main-none-eabi.html)
 [![forbid unsafe](https://img.shields.io/badge/unsafe-forbid_outside_2_ops-brightgreen?style=flat-square)](https://doc.rust-lang.org/reference/attributes/codegen.html)
 [![Workspace](https://img.shields.io/badge/cargo-workspace-yellow?style=flat-square&logo=rust)](https://doc.rust-lang.org/cargo/reference/workspaces.html)
+[![AxonOS Radar](https://img.shields.io/badge/AxonOS%20Radar-open%20neurotech%20map-1f8fae?style=flat-square&labelColor=0b1220)](https://axonos-bci.github.io/axonos-community-radar/)
 
 [**About**](./ABOUT.md) · [**Architecture**](#architecture) · [**Crates**](#crates) · [**Build**](#build) · [**Verification**](#verification) · [**Contributing**](./CONTRIBUTING.md) · [**Licence**](#license)
 
